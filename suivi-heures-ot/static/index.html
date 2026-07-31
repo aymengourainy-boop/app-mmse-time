@@ -1,0 +1,2342 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Time MMSE</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap");
+    :root {
+      --bg: #f0f4f8;
+      --panel: #ffffff;
+      --panel-alt: #f8fafc;
+      --border: #cbd5e1;
+      --text: #1a202c;
+      --muted: #64748b;
+      --accent: #1e40af;
+      --accent-2: #3b82f6;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --shadow: 0 10px 40px rgba(30, 64, 175, 0.15);
+      font-family: "Poppins", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #f8fafc, #e2e8f0 60%, #cbd5e1 100%);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 16px;
+    }
+    header {
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 2px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .brand {
+      font-family: 'Inter', 'Poppins', sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      font-size: 24px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand .time { color: var(--accent); }
+    .brand .mmse {
+      color: #facc15;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      padding: 4px 12px;
+      border: 2px solid #000;
+      border-radius: 10px;
+      background: #000;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+    }
+    .logo-jesa {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 98px;
+      height: 62px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(240,248,245,0.95));
+      border: 2px solid rgba(5, 150, 105, 0.22);
+      border-radius: 14px;
+      overflow: hidden;
+      padding: 6px;
+      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.16);
+      margin-left: 8px;
+    }
+    .logo-jesa img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      filter: saturate(1.1) contrast(1.08);
+    }
+    .user-box { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+    button {
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: transform .15s ease, background .15s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; }
+    .btn-secondary { background: var(--panel-alt); color: var(--text); border: 1px solid var(--border); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-warning { background: var(--warning); color: #2d2000; }
+    main { max-width: 1400px; margin: 0 auto; padding: 32px 24px 80px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .card h2 { margin-top: 0; margin-bottom: 18px; font-size: 20px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    .page-intro {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,249,255,0.9));
+      box-shadow: var(--shadow);
+    }
+    .page-intro strong { display:block; font-size: 16px; color: var(--text); }
+    .page-intro span { display:block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .filter-panel {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+    .filter-panel .field { display: flex; flex-direction: column; gap: 6px; }
+    .filter-panel .field label { margin: 0; }
+    .status-sections { display: grid; gap: 16px; }
+    .status-section {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .status-section-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      color: white;
+    }
+    .status-section-header strong { font-size: 15px; }
+    .status-section-header span { font-size: 12px; opacity: .92; }
+    .status-section-header.technicien-header { background: linear-gradient(135deg, #2f7de0, #5ea0ff); }
+    .status-section-header.periode-header { background: linear-gradient(135deg, #7c8cff, #9fb8ff); }
+    .status-section-body { padding: 16px; }
+    .section-attente { background: linear-gradient(135deg, #f3aa2f, #f7c45e); }
+    .section-retour { background: linear-gradient(135deg, #7c8cff, #5ea0ff); }
+    .section-approuvee { background: linear-gradient(135deg, #2aa66f, #5bc98f); }
+    .section-rejetee { background: linear-gradient(135deg, #e75b5b, #ff7a7a); }
+    .section-brouillon { background: linear-gradient(135deg, #2f7de0, #5ea0ff); }
+    .request-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+    .request-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(255,255,255,.8);
+    }
+    .request-card.attente { border-left: 4px solid var(--warning); }
+    .request-card.retour_modification { border-left: 4px solid #7c8cff; }
+    .request-card.approuvee { border-left: 4px solid var(--success); }
+    .request-card.rejetee { border-left: 4px solid var(--danger); }
+    .request-card.brouillon { border-left: 4px solid var(--accent); }
+    .request-card .request-title { margin-bottom: 2px; }
+    .required-star { color: var(--danger); font-weight: 900; margin-left: 4px; }
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .flow-step {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: var(--panel-alt);
+      min-height: 78px;
+    }
+    .flow-step .kicker {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .flow-step b { display: block; margin-bottom: 4px; color: var(--text); }
+    .flow-step p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .request-locked {
+      opacity: 0.78;
+      background: rgba(232, 238, 247, 0.7);
+      border-left: 4px solid var(--warning);
+    }
+    .inline-success {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(42, 166, 111, 0.10);
+      color: var(--text);
+      border: 1px solid rgba(42, 166, 111, 0.18);
+    }
+    label { display: block; margin-top: 14px; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: .06em; }
+    input, select, textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 500;
+      font-family: inherit;
+      transition: border-color 0.2s ease;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--panel);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .empty { color: var(--muted); text-align: center; padding: 28px 0; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .pill-brouillon { background: rgba(71,193,255,.16); color: var(--accent); }
+    .pill-en_attente { background: rgba(245,185,66,.16); color: var(--warning); }
+    .pill-approuvee { background: rgba(33,192,122,.16); color: var(--success); }
+    .pill-rejetee { background: rgba(241,93,93,.16); color: var(--danger); }
+    .pill-retour_modification { background: rgba(108,124,255,.16); color: #b4b8ff; }
+    .week-grid { display: grid; grid-template-columns: 120px 1fr 1fr 70px; gap: 10px; align-items: center; margin-top: 8px; }
+    .week-grid .day { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+    .week-grid .day-check { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .totals { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 13px; }
+    .totals b { color: var(--text); }
+    .request {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.02);
+    }
+    .request-header { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; }
+    .request-title { font-weight: 700; margin-bottom: 4px; }
+    .request-meta { color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .login-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .login-card { width: 100%; max-width: 420px; }
+    .brand-login { font-size: 28px; font-weight: 900; text-align: center; color: var(--accent); margin-bottom: 12px; text-transform: uppercase; letter-spacing: -.02em; }
+    .brand-login .time { color: var(--accent); }
+    .brand-login .mmse {
+      color: #facc15;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      padding: 4px 12px;
+      border: 2px solid #000;
+      border-radius: 10px;
+      background: #000;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+    }
+    .subtitle { text-align: center; color: var(--muted); margin-bottom: 18px; }
+    .error { color: var(--danger); margin-top: 12px; min-height: 18px; font-size: 13px; }
+    .forgot-link {
+      margin-top: 10px;
+      color: var(--accent);
+      background: transparent;
+      border: 0;
+      padding: 0;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: none;
+      transform: none;
+    }
+    .forgot-panel {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-alt);
+    }
+    .forgot-panel .mini-title { font-weight: 800; color: var(--text); margin-bottom: 8px; }
+    .forgot-panel .row-inline { display: grid; gap: 10px; }
+    #vueApp { display: none; }
+    .hidden { display: none !important; }
+
+    /* ========== RESPONSIVE DESIGN FOR MOBILE ========== */
+    @media (max-width: 768px) {
+      :root { font-size: 14px; }
+      
+      header {
+        padding: 16px 16px;
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .logo-jesa {
+        width: 78px;
+        height: 50px;
+        padding: 5px;
+      }
+      
+      .brand {
+        font-size: 20px;
+        gap: 6px;
+      }
+      
+      .user-box {
+        font-size: 12px;
+        width: 100%;
+        justify-content: center;
+      }
+      
+      main {
+        padding: 20px 16px 60px;
+        max-width: 100%;
+      }
+      
+      .card {
+        padding: 20px;
+        margin-bottom: 18px;
+        border-radius: 16px;
+      }
+      
+      .card h2 { font-size: 18px; margin-bottom: 14px; }
+      
+      label { font-size: 13px; margin-top: 12px; margin-bottom: 6px; }
+      
+      input, select, textarea {
+        padding: 12px 14px;
+        font-size: 14px;
+        border-radius: 10px;
+      }
+      
+      button {
+        padding: 12px 16px;
+        font-size: 14px;
+        border-radius: 10px;
+      }
+      
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      
+      .filter-panel {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      
+      .page-intro {
+        flex-direction: column;
+        padding: 14px 16px;
+        gap: 12px;
+      }
+      
+      .page-intro strong { font-size: 15px; }
+      .page-intro span { font-size: 12px; margin-top: 2px; }
+      
+      .request-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      
+      .request-card {
+        padding: 12px;
+        border-radius: 12px;
+      }
+      
+      .flow-steps {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      
+      .flow-step {
+        padding: 10px 12px;
+        min-height: auto;
+        border-radius: 10px;
+      }
+      
+      .flow-step b { font-size: 13px; }
+      .flow-step p { font-size: 11px; }
+      
+      table {
+        font-size: 13px;
+      }
+      
+      table thead {
+        display: none;
+      }
+      
+      table tr {
+        display: block;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: var(--panel-alt);
+      }
+      
+      table td {
+        display: block;
+        margin-bottom: 8px;
+        padding: 0;
+      }
+      
+      table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--accent);
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      
+      .status-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 12px 14px;
+      }
+      
+      .status-section-header strong { font-size: 14px; }
+      .status-section-header span { font-size: 11px; }
+      
+      .pill {
+        font-size: 10px;
+        padding: 5px 8px;
+      }
+      
+      .totals {
+        flex-direction: column;
+        font-size: 12px;
+        gap: 8px;
+      }
+      
+      .week-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      
+      .login-shell { padding: 16px; }
+      
+      .login-card {
+        max-width: 100%;
+        width: 100%;
+      }
+      
+      .brand-login {
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+      
+      .subtitle { font-size: 13px; }
+      
+      .error { font-size: 12px; }
+      
+      .request-meta { font-size: 12px; }
+      
+      .row { gap: 8px; }
+      
+      .muted { font-size: 12px; }
+    }
+
+    @media (max-width: 480px) {
+      :root { font-size: 13px; }
+      
+      header {
+        padding: 12px 12px;
+      }
+      
+      .brand {
+        font-size: 18px;
+      }
+      
+      main { padding: 16px 12px 50px; }
+      
+      .card {
+        padding: 16px;
+        border-radius: 14px;
+      }
+      
+      .card h2 { font-size: 16px; margin-bottom: 12px; }
+      
+      label { font-size: 12px; }
+      
+      input, select, textarea {
+        padding: 11px 12px;
+        font-size: 13px;
+      }
+      
+      button {
+        padding: 11px 14px;
+        font-size: 13px;
+      }
+      
+      .filter-panel {
+        grid-template-columns: 1fr;
+      }
+      
+      .page-intro {
+        padding: 12px 14px;
+        margin-bottom: 14px;
+      }
+      
+      .page-intro strong { font-size: 14px; }
+      
+      table {
+        font-size: 12px;
+      }
+      
+      table tr {
+        padding: 10px;
+        margin-bottom: 12px;
+      }
+      
+      .status-section-header {
+        padding: 10px 12px;
+      }
+      
+      .status-section-header strong { font-size: 13px; }
+      
+      .flow-step {
+        padding: 8px 10px;
+      }
+      
+      .brand-login { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="ecranConnexion" class="login-shell">
+    <div class="card login-card">
+      <div class="brand-login"><span class="time">TIME</span> <span class="mmse">MMSE</span></div>
+      <div class="subtitle">Gestion des heures et OT</div>
+      <label>Matricule</label>
+      <input id="champMatricule" placeholder="ex: 000001" autocomplete="username" />
+      <label>Mot de passe</label>
+      <input id="champMdp" type="password" placeholder="••••••••" autocomplete="current-password" />
+      <button class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="connecter()">Se connecter</button>
+      <button class="forgot-link" style="width: 100%;" onclick="basculerMotDePasseOublie()">Mot de passe oublié ?</button>
+      <div id="blocMotDePasseOublie" class="forgot-panel hidden">
+        <div class="mini-title">Réinitialisation par email</div>
+        <div class="row-inline">
+          <input id="champEmailReset" type="email" placeholder="Adresse Gmail ou email du compte" />
+          <button class="btn-secondary" onclick="demanderReinitialisationMotDePasse()">Envoyer le code</button>
+        </div>
+        <div class="row-inline" style="margin-top: 10px;">
+          <input id="champCodeReset" placeholder="Code reçu par email" />
+          <input id="champNouveauMdp" type="password" placeholder="Nouveau mot de passe" />
+          <input id="champConfirmationMdp" type="password" placeholder="Confirmer le mot de passe" />
+          <button class="btn-primary" onclick="reinitialiserMotDePasse()">Réinitialiser</button>
+        </div>
+      </div>
+      <div class="error" id="erreurConnexion"></div>
+    </div>
+  </div>
+
+  <div id="vueApp">
+    <header>
+      <div class="brand"><span class="time">TIME</span> <span class="mmse">MMSE</span></div>
+      <div style="display: flex; align-items: center; gap: 20px; flex: 1; justify-content: flex-end;">
+        <div class="user-box">
+          <span id="texteUtilisateur"></span>
+        </div>
+        <div class="logo-jesa">
+          <img src="/static/jesa-logo.png" alt="Logo JESA" />
+        </div>
+        <select id="selectExportStatut" class="btn-secondary hidden" onchange="actualiserExportButton()" style="min-width:140px;">
+          <option value="">Toutes les demandes</option>
+          <option value="en_attente">En attente</option>
+          <option value="approuvee">Approuvées</option>
+          <option value="rejetee">Rejetées</option>
+        </select>
+        <button id="btnToggleArchived" class="btn-secondary hidden" onclick="toggleArchived()">Voir archivées</button>
+        <button id="btnExporter" class="btn-warning hidden" onclick="exporterDemandes()">⬇ Exporter</button>
+        <button class="btn-secondary" onclick="deconnecter()">Déconnexion</button>
+      </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="vueAdmin" class="hidden">
+        <div class="page-intro">
+          <div>
+            <strong>Administration</strong>
+            <span>Gérez les autorisations week-end et les jours fériés en un coup d'œil.</span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Administration rapide</h2>
+          <div class="grid-2">
+            <div class="card" style="padding: 16px; margin-bottom: 0;">
+              <h2>Autorisations week-end</h2>
+              <div id="listeUtilisateursWeekend" class="muted">Chargement…</div>
+            </div>
+            <div class="card" style="padding: 16px; margin-bottom: 0;">
+              <h2>Jours fériés marocains</h2>
+              <div style="display:grid; gap:10px; margin-bottom:12px;">
+                <div>
+                  <label style="margin-top:0; margin-bottom:6px;">Date</label>
+                  <input id="champJourFerieDate" type="date" />
+                </div>
+                <div>
+                  <label style="margin-top:0; margin-bottom:6px;">Nom</label>
+                  <input id="champJourFerieNom" placeholder="ex: Eid al-Adha" />
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; margin-top:0;">
+                  <input id="champJourFerieActif" type="checkbox" checked />
+                  <span>Actif</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-top:0;">
+                  <input id="champJourFerieComptabilise" type="checkbox" checked />
+                  <span>Comptabiliser pour techniciens normaux</span>
+                </label>
+                <button class="btn-primary" onclick="ajouterJourFerie()">Ajouter</button>
+              </div>
+              <div id="listeJoursFeriesAdmin" class="muted">Chargement…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="vueTechnicien" class="hidden">
+        <div class="card">
+          <h2 id="titreFormulaire">Nouvelle demande</h2>
+          <div class="grid-2">
+            <div>
+              <label>Ordre de travail SAP</label>
+              <input id="champOT" placeholder="ex: OT-45210" />
+            </div>
+            <div>
+              <label>Équipement concerné</label>
+              <input id="champEquipement" placeholder="ex: Compresseur ligne 3" />
+            </div>
+          </div>
+          <label>Type d'intervention</label>
+          <select id="champType">
+            <option value="preventive">Préventive</option>
+            <option value="corrective">Corrective</option>
+            <option value="depannage">Dépannage</option>
+            <option value="inspection">Inspection</option>
+            <option value="autre">Autre</option>
+          </select>
+          <label>Pièces jointes<span class="required-star">*</span></label>
+          <input type="file" id="champFichiers" multiple />
+          <label>Description des travaux</label>
+          <textarea id="champDescription"></textarea>
+
+          <label>Motif / raison des heures supplémentaires<span class="required-star">*</span></label>
+          <textarea id="champJustificationOT" placeholder="Expliquez la raison des heures supplémentaires (ex. intervention urgente, charge de travail, etc.)"></textarea>
+  
+          <div class="card" id="periodeHebdoWrapper" style="padding: 16px; margin-top: 16px;">
+            <h2>Période hebdomadaire<span class="required-star">*</span></h2>
+            <div id="periodeSemaine" class="muted" style="margin-top: 8px;">Chargement de la période...</div>
+            <div id="weekBreakdown"></div>
+            <div class="totals">
+              <div><b id="totalNormal">0.00</b> h normales</div>
+              <div><b id="totalSupp">0.00</b> h supplémentaires</div>
+              <div><b id="totalGlobal">0.00</b> h totales</div>
+            </div>
+          </div>
+
+          <label>Commentaire / note interne</label>
+          <textarea id="champCommentaires"></textarea>
+
+          <div class="row" style="margin-top: 16px;">
+            <button class="btn-secondary" id="btnAnnulerEdition" onclick="annulerEdition()" style="display:none">Annuler</button>
+            <button class="btn-secondary" onclick="creerDemande(false)">Sauvegarder</button>
+            <button class="btn-primary" onclick="creerDemande(true)">Envoyer au superviseur</button>
+          </div>
+          <div class="error" id="erreurDemande"></div>
+        </div>
+
+        <div class="card">
+          <h2>Mes demandes</h2>
+          <div id="listeDemandesTechnicien"><div class="empty">Chargement…</div></div>
+        </div>
+      </div>
+
+      <div id="vueSuperviseur" class="hidden">
+        <div class="page-intro">
+          <div>
+            <strong>Espace superviseur</strong>
+            <span>Validez plus vite grâce à un aperçu clair des demandes et des totaux.</span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Filtres de consultation</h2>
+          <div class="filter-panel">
+            <div class="field">
+              <label>Statut</label>
+              <select id="filtreStatutSuperviseur" onchange="chargerDemandesSuperviseur()">
+                <option value="all">Tous les statuts</option>
+                <option value="en_attente">En attente</option>
+                <option value="retour_modification">Retour modification</option>
+                <option value="approuvee">Approuvées</option>
+                <option value="rejetee">Rejetées</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Technicien</label>
+              <input id="filtreTechnicienSuperviseur" placeholder="Nom ou prénom" oninput="chargerDemandesSuperviseur()" />
+            </div>
+            <div class="field">
+              <label>Du</label>
+              <input id="filtreDateDebutSuperviseur" type="date" onchange="chargerDemandesSuperviseur()" />
+            </div>
+            <div class="field">
+              <label>Au</label>
+              <input id="filtreDateFinSuperviseur" type="date" onchange="chargerDemandesSuperviseur()" />
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Tableau de bord</h2>
+          <div class="grid-3">
+            <div class="card" style="padding: 14px; margin-bottom: 0;">
+              <div style="font-size: 24px; font-weight: 800; color: var(--warning);" id="statAttente">0</div>
+              <div class="muted">En attente</div>
+            </div>
+            <div class="card" style="padding: 14px; margin-bottom: 0;">
+              <div style="font-size: 24px; font-weight: 800; color: var(--success);" id="statApprouvees">0</div>
+              <div class="muted">Approuvées</div>
+            </div>
+            <div class="card" style="padding: 14px; margin-bottom: 0;">
+              <div style="font-size: 24px; font-weight: 800; color: var(--danger);" id="statRejetees">0</div>
+              <div class="muted">Rejetées</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Demandes à traiter / archivées</h2>
+          <div id="listeDemandesSuperviseur"><div class="empty">Chargement…</div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API = "";
+    const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+    const LIBELLES_JOURS = { lundi: "Lundi", mardi: "Mardi", mercredi: "Mercredi", jeudi: "Jeudi", vendredi: "Vendredi", samedi: "Samedi", dimanche: "Dimanche" };
+
+    const SEUIL_NORMAL_JOUR = 9.0;
+    let semaineDates = {};
+    let joursFeriesActifs = [];
+    let joursAffiches = JOURS.slice();
+    
+    function formatDateShort(date) {
+      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+    }
+
+    function formatDateLong(date) {
+      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+    }
+
+    function calculerDebutSemaine(reference = new Date()) {
+      const jour = reference.getDay();
+      const diff = jour === 0 ? -6 : 1 - jour;
+      const debut = new Date(reference);
+      debut.setDate(reference.getDate() + diff);
+      debut.setHours(0, 0, 0, 0);
+      return debut;
+    }
+
+    function initialiserSemaineDates(reference = new Date()) {
+      const debut = calculerDebutSemaine(reference);
+      semaineDates = {};
+      JOURS.forEach((jour, index) => {
+        const date = new Date(debut);
+        date.setDate(debut.getDate() + index);
+        semaineDates[jour] = date;
+      });
+    }
+    const LIBELLES_STATUT = {
+      brouillon: "Brouillon",
+      en_attente: "En attente",
+      approuvee: "Approuvée",
+      rejetee: "Rejetée",
+      retour_modification: "Retour modification",
+    };
+
+    let token = null;
+    let utilisateurCourant = null;
+    let demandeEnEditionId = null;
+    let adminViewingArchived = false;
+    let refreshUserTimer = null;
+
+    function formatHeures(value) {
+      const num = Number(value || 0);
+      return isNaN(num) ? "0.00" : num.toFixed(2);
+    }
+
+    function formatDateDemande(value) {
+      return new Date(`${value}T00:00:00`).toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+      });
+    }
+
+    function formatDateKey(date) {
+      const annee = date.getFullYear();
+      const mois = String(date.getMonth() + 1).padStart(2, "0");
+      const jour = String(date.getDate()).padStart(2, "0");
+      return `${annee}-${mois}-${jour}`;
+    }
+
+    function parseDateInput(value) {
+      if (!value) return null;
+      const date = new Date(`${value}T00:00:00`);
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    function getSupervisorFilters() {
+      return {
+        statut: document.getElementById("filtreStatutSuperviseur")?.value || "all",
+        technicien: (document.getElementById("filtreTechnicienSuperviseur")?.value || "").trim().toLowerCase(),
+        debut: parseDateInput(document.getElementById("filtreDateDebutSuperviseur")?.value),
+        fin: parseDateInput(document.getElementById("filtreDateFinSuperviseur")?.value),
+      };
+    }
+
+    const STATUS_ORDER = ["en_attente", "retour_modification", "approuvee", "rejetee", "brouillon"];
+    const STATUS_META = {
+      en_attente: { label: "En attente", tone: "attente", className: "section-attente", cardClass: "attente" },
+      retour_modification: { label: "Retour modification", tone: "retour", className: "section-retour", cardClass: "retour_modification" },
+      approuvee: { label: "Approuvées", tone: "approuvee", className: "section-approuvee", cardClass: "approuvee" },
+      rejetee: { label: "Rejetées", tone: "rejetee", className: "section-rejetee", cardClass: "rejetee" },
+      brouillon: { label: "Brouillons", tone: "brouillon", className: "section-brouillon", cardClass: "brouillon" },
+    };
+
+    function filtreDemandeSuperviseur(demande, filtres) {
+      if (filtres.statut !== "all" && demande.statut !== filtres.statut) return false;
+      const nom = `${demande.technicien_prenom || ""} ${demande.technicien_nom || ""}`.trim().toLowerCase();
+      if (filtres.technicien && nom.indexOf(filtres.technicien) === -1) return false;
+      const dateDemande = parseDateInput(demande.date_demande);
+      if (filtres.debut && dateDemande && dateDemande < filtres.debut) return false;
+      if (filtres.fin && dateDemande && dateDemande > filtres.fin) return false;
+      return true;
+    }
+
+    function renderCarteDemandeSuperviseur(d, peutAgir = true) {
+      const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+      const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+      const meta = STATUS_META[d.statut] || STATUS_META.en_attente;
+
+      if (d.statut === "brouillon") {
+        return `
+          <div class="request-card brouillon">
+            <div class="request-header">
+              <div>
+                <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+                <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
+                <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
+              </div>
+              ${badgeStatut(d.statut)}
+            </div>
+            <div class="request-meta" style="margin-top:8px;">Brouillon non envoyé.</div>
+          </div>
+        `;
+      }
+
+      if (d.statut !== "en_attente" || !peutAgir) {
+        return `
+          <div class="request-card ${meta.cardClass}">
+            <div class="request-header">
+              <div>
+                <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+                <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
+                <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
+                <div class="request-meta">Normales : <b>${formatHeures(normales)}h</b> · supp. : <b>${formatHeures(supp)}h</b></div>
+              </div>
+              ${badgeStatut(d.statut)}
+            </div>
+            ${d.statut === "retour_modification" ? '<div class="muted" style="margin-top:8px;">En retour pour correction.</div>' : '<div class="muted" style="margin-top:8px;">Cette demande est en lecture seule.</div>'}
+          </div>
+        `;
+      }
+
+      return `
+        <div class="request-card attente">
+          <div class="request-header">
+            <div>
+              <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+              <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
+              <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
+              <div class="request-meta">Normales : <b>${formatHeures(normales)}h</b> · supp. : <b>${formatHeures(supp)}h</b></div>
+            </div>
+            ${badgeStatut(d.statut)}
+          </div>
+          <div class="request-meta" style="margin-top:8px;">Détails des travaux : ${escapeHtml(d.description_travaux || "—")}</div>
+          <label>Commentaire pour la décision<span class="required-star">*</span></label>
+          <textarea id="comment-${d.id}" placeholder="Ajoutez un commentaire obligatoire avant validation"></textarea>
+          <div class="row" style="margin-top: 12px;">
+            <button class="btn-success" onclick="valider(${d.id}, 'approuver')">Approuver</button>
+            <button class="btn-warning" onclick="valider(${d.id}, 'retourner')">Retour pour modification</button>
+            <button class="btn-danger" onclick="valider(${d.id}, 'rejeter')">Rejeter</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSectionDemandeSuperviseur(statut, demandes, peutAgir = true) {
+      const meta = STATUS_META[statut] || STATUS_META.en_attente;
+      return `
+      <section class="status-section">
+        <div class="status-section-header ${meta.className}">
+          <div>
+            <strong>${meta.label}</strong><br />
+            <span>${demandes.length} demande(s)</span>
+          </div>
+        </div>
+        <div class="status-section-body">
+          <div class="request-grid">
+            ${demandes.map((d) => renderCarteDemandeSuperviseur(d, peutAgir)).join("")}
+          </div>
+        </div>
+      </section>
+      `;
+    }
+
+    function renderSectionDemandeTechnicien(nomTechnicien, demandes, peutAgir = true) {
+      return `
+      <section class="status-section">
+        <div class="status-section-header technicien-header">
+          <div>
+            <strong>${escapeHtml(nomTechnicien)}</strong><br />
+            <span>${demandes.length} demande(s)</span>
+          </div>
+        </div>
+        <div class="status-section-body">
+          <div class="request-grid">
+            ${demandes.map((d) => renderCarteDemandeSuperviseur(d, peutAgir)).join("")}
+          </div>
+        </div>
+      </section>
+      `;
+    }
+
+    function fullNameFromDemande(demande) {
+      return `${demande.technicien_prenom || ""} ${demande.technicien_nom || ""}`.trim() || "Technicien";
+    }
+
+    function estRoleShift(role) {
+      return role === "technicien_shift" || role === "superviseur_shift";
+    }
+
+    function obtenirJoursRestants(reference = new Date(), role = "") {
+      const courant = new Date(reference);
+      courant.setHours(0, 0, 0, 0);
+      const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
+      return JOURS.filter((jour) => {
+        const date = semaineDates[jour];
+        if (!date) return false;
+        if (date.getTime() <= courant.getTime()) return false;
+        if (!estRoleShift(role) && !autoriseWeekend) {
+          const day = date.getDay();
+          if (day === 0 || day === 6) return false;
+        }
+        return true;
+      });
+    }
+
+    function periodeLabelPourJours(jours) {
+      if (!jours || jours.length === 0) return "Période : aucun jour restant";
+      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      const first = semaineDates[jours[0]];
+      const last = semaineDates[jours[jours.length - 1]];
+      if (!first || !last) return "Période hebdomadaire";
+      return `Période : ${format(first)} - ${format(last)}`;
+    }
+
+    function calculerJoursAffichesTechnicien(demandes, role, reference = new Date()) {
+      const sentStatuses = ["en_attente", "approuvee", "rejetee"];
+      const weekStart = calculerDebutSemaine(reference);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekStart.setHours(0, 0, 0, 0);
+      weekEnd.setHours(23, 59, 59, 999);
+      const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
+
+      const demandesEnvoyees = new Set();
+      (demandes || []).forEach((demande) => {
+        if (sentStatuses.indexOf(demande.statut) === -1) return;
+        const dateDemande = new Date(`${demande.date_demande}T00:00:00`);
+        if (dateDemande < weekStart || dateDemande > weekEnd) return;
+        demandesEnvoyees.add(formatDateKey(dateDemande));
+      });
+
+      const aujourdHui = new Date(reference);
+      aujourdHui.setHours(0, 0, 0, 0);
+
+      return JOURS.filter((jour) => {
+        const date = semaineDates[jour];
+        if (!date) return false;
+        const dateCle = formatDateKey(date);
+        if (date.getTime() < aujourdHui.getTime()) return false;
+        if (!estRoleShift(role) && !autoriseWeekend) {
+          const day = date.getDay();
+          if (day === 0 || day === 6) return false;
+        }
+        if (demandesEnvoyees.has(dateCle)) return false;
+        return true;
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function initialiserSemaine(joursVisibles = JOURS, reference = new Date()) {
+      initialiserSemaineDates();
+      joursAffiches = joursVisibles.slice();
+      const container = document.getElementById("weekBreakdown");
+      container.innerHTML = "";
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      if (!joursAffiches.length) {
+        container.innerHTML = '<div class="empty" style="padding:16px 0;">Aucun jour restant dans la semaine.</div>';
+        const periodeLabel = document.getElementById('periodeSemaine');
+        if (periodeLabel) {
+          periodeLabel.textContent = periodeLabelPourJours(joursAffiches);
+        }
+        actualiserTotaux();
+        return;
+      }
+      table.innerHTML = `
+        <thead>
+          <tr style="text-align:left;">
+            <th style="width:18%; padding:8px;">Date</th>
+            <th style="padding:8px;">Heure de début</th>
+            <th style="padding:8px;">Heure de fin</th>
+            <th style="padding:8px;">Nombre d'heures</th>
+            <th style="padding:8px;">Heures supplémentaires</th>
+            <th style="padding:8px;">Majoration</th>
+            <th style="padding:8px;">Congé</th>
+          </tr>
+        </thead>
+        <tbody id="weekBody"></tbody>
+      `;
+      container.appendChild(table);
+      const periodeLabel = document.getElementById('periodeSemaine');
+      if (periodeLabel) {
+        periodeLabel.textContent = periodeLabelPourJours(joursAffiches);
+      }
+
+      const body = document.getElementById('weekBody');
+      joursAffiches.forEach((jour) => {
+        const date = semaineDates[jour];
+        const tr = document.createElement('tr');
+        tr.dataset.date = date.toISOString().slice(0, 10);
+        tr.innerHTML = `
+          <td style="padding:8px;"><strong>${LIBELLES_JOURS[jour]}</strong><br/><span style="font-size:12px; color:var(--muted);">${formatDateShort(date)}</span></td>
+          <td style="padding:6px;"><input type="time" id="start_${jour}" disabled/></td>
+          <td style="padding:6px;"><input type="time" id="end_${jour}" disabled/></td>
+          <td style="padding:6px;"><input type="text" id="total_${jour}" readonly style="background:transparent; border:none; color:var(--muted); font-weight:700;" value="0.00" /></td>
+          <td style="padding:6px;"><input type="text" id="supp_${jour}" readonly style="background:transparent; border:none; color:var(--muted); font-weight:700;" value="" /></td>
+          <td style="padding:6px; min-width:120px;"><div id="suppInfo_${jour}" style="font-size:12px; color:var(--muted); min-height:1.4em;"></div></td>
+          <td style="padding:6px; text-align:center;"><input type="checkbox" id="conge_${jour}" disabled/></td>
+        `;
+        body.appendChild(tr);
+
+        // events
+        document.getElementById(`start_${jour}`).addEventListener('change', () => { calculerPourJour(jour); });
+        document.getElementById(`end_${jour}`).addEventListener('change', () => { calculerPourJour(jour); });
+        document.getElementById(`conge_${jour}`).addEventListener('change', () => {
+          if (document.getElementById(`conge_${jour}`).checked) {
+            document.getElementById(`start_${jour}`).value = '';
+            document.getElementById(`end_${jour}`).value = '';
+            document.getElementById(`total_${jour}`).value = '0.00';
+            document.getElementById(`supp_${jour}`).value = '';
+          }
+          actualiserTotaux();
+        });
+      });
+
+      actualiserVisibiliteWeekends();
+    }
+
+    function calculerPourJour(jour) {
+      const start = document.getElementById(`start_${jour}`).value;
+      const end = document.getElementById(`end_${jour}`).value;
+      const suppInfoEl = document.getElementById(`suppInfo_${jour}`);
+      const date = semaineDates[jour];
+      const estFerie = isJourFerie(date);
+      const comptabilise = estJourFerieComptabilisePourRole(date);
+      const role = utilisateurCourant ? utilisateurCourant.role : "";
+      if (!start || !end) {
+        document.getElementById(`total_${jour}`).value = '0.00';
+        document.getElementById(`supp_${jour}`).value = '';
+        if (suppInfoEl) suppInfoEl.textContent = '';
+        actualiserTotaux();
+        return;
+      }
+      if (estFerie && !comptabilise && (role === 'technicien' || role === 'superviseur')) {
+        document.getElementById(`total_${jour}`).value = '0.00';
+        document.getElementById(`supp_${jour}`).value = '';
+        if (suppInfoEl) suppInfoEl.textContent = 'Non comptabilisé';
+        actualiserTotaux();
+        return;
+      }
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      let debut = new Date(); debut.setHours(sh, sm, 0, 0);
+      let fin = new Date(); fin.setHours(eh, em, 0, 0);
+      if (fin <= debut) fin.setDate(fin.getDate() + 1);
+      const result = calculerMajoration(jour, debut, fin);
+      document.getElementById(`total_${jour}`).value = result.total.toFixed(2);
+      document.getElementById(`supp_${jour}`).value = result.supp > 0 ? result.supp.toFixed(2) : '';
+      if (suppInfoEl) suppInfoEl.textContent = result.info;
+      actualiserTotaux();
+    }
+
+    function actualiserVisibiliteWeekends() {
+      try {
+        const role = utilisateurCourant ? utilisateurCourant.role : null;
+        const autorise = utilisateurCourant ? utilisateurCourant.autorise_weekend : false;
+
+        // Par défaut : désactiver tous les champs — on active ensuite selon rôle
+        JOURS.forEach((jour) => {
+          ['start_', 'end_', 'supp_', 'conge_'].forEach((prefix) => {
+            const el = document.getElementById(prefix + jour);
+            if (!el) return;
+            el.disabled = true;
+            el.style.opacity = '0.45';
+          });
+        });
+
+        // Helper pour activer/unlock
+        const setEnabled = (jour, enabled) => {
+          ['start_', 'end_', 'supp_', 'conge_'].forEach((prefix) => {
+            const el = document.getElementById(prefix + jour);
+            if (!el) return;
+            el.disabled = !enabled;
+            el.style.opacity = enabled ? '' : '0.45';
+          });
+        };
+
+        // Si admin -> tout activé
+        if (role === 'administrateur') {
+          JOURS.forEach((jour) => setEnabled(jour, true));
+          return;
+        }
+
+        // Technicien shift : uniquement le jour courant
+        if (role === 'technicien_shift') {
+          const mapping = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+          const todayLabel = mapping[(new Date()).getDay()];
+          JOURS.forEach((jour) => setEnabled(jour, jour === todayLabel));
+          return;
+        }
+
+        // Superviseur shift : tout activé (incl. week-ends)
+        if (role === 'superviseur_shift') {
+          JOURS.forEach((jour) => setEnabled(jour, true));
+          return;
+        }
+
+        // Rôles normaux :
+        // - technicien (normal) : la ligne du jour est éditable ; si l'autorisation week-end est donnée, les week-ends deviennent aussi éditables
+        // - superviseur (normal) : lun-ven éditables, week-end grisés sauf si compte autorise_weekend
+        if (role === 'technicien') {
+          const mapping = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+          const todayLabel = mapping[(new Date()).getDay()];
+          const isWeekendToday = (todayLabel === 'samedi' || todayLabel === 'dimanche');
+          if (isWeekendToday && !autorise) {
+            return;
+          }
+          JOURS.forEach((jour) => {
+            const date = semaineDates[jour];
+            const isHolidayDay = Boolean(date && isJourFerie(date));
+            const isWeekendDay = jour === 'samedi' || jour === 'dimanche';
+            const shouldEnable = autorise ? (isHolidayDay || isWeekendDay || jour === todayLabel) : (isHolidayDay || jour === todayLabel);
+            setEnabled(jour, shouldEnable);
+          });
+          return;
+        }
+
+        if (role === 'superviseur') {
+          JOURS.forEach((jour) => {
+            if (jour === 'samedi' || jour === 'dimanche') {
+              setEnabled(jour, !!autorise);
+            } else {
+              setEnabled(jour, true);
+            }
+          });
+          return;
+        }
+
+        // Par défaut (non connecté) : tout désactivé (sécurité)
+      } catch (e) {
+        // ignore
+      }
+    }
+
+
+
+    function isJourFerie(date) {
+      const cle = date.toISOString().slice(0, 10);
+      return joursFeriesActifs.some((jour) => jour.date === cle);
+    }
+
+    function estJourFerieComptabilisePourRole(date) {
+      const role = utilisateurCourant ? utilisateurCourant.role : "";
+      if (role !== "technicien" && role !== "superviseur") {
+        return true;
+      }
+      const cle = formatDateKey(date);
+      const jourFerie = joursFeriesActifs.find((item) => item.date === cle);
+      if (!jourFerie) {
+        return true;
+      }
+      return Boolean(jourFerie.comptabilise_pour_techniciens_normaux !== false);
+    }
+
+    function isWeekend(date) {
+      return date.getDay() === 0 || date.getDay() === 6;
+    }
+
+    function overlapHours(start, end, periodStart, periodEnd) {
+      const debut = Math.max(start.getTime(), periodStart.getTime());
+      const fin = Math.min(end.getTime(), periodEnd.getTime());
+      return Math.max(0, (fin - debut) / 3600000);
+    }
+
+    function calculerMajoration(jour, start, end) {
+      const date = semaineDates[jour];
+      const isFerie = isJourFerie(date);
+      const isRepos = isWeekend(date);
+      const totalHours = Math.round(((end - start) / 3600000) * 100) / 100;
+      if (totalHours <= 0) {
+        return { total: 0, normale: 0, supp: 0, info: "" };
+      }
+      if (isFerie || isRepos) {
+        return { total: totalHours, normale: 0, supp: totalHours, info: `${totalHours.toFixed(2)}h à 100%` };
+      }
+
+      const dayStart = new Date(date);
+      dayStart.setHours(6, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(21, 0, 0, 0);
+      const nightStart1 = new Date(date);
+      nightStart1.setHours(0, 0, 0, 0);
+      const nightEnd1 = new Date(date);
+      nightEnd1.setHours(6, 0, 0, 0);
+      const nightStart2 = new Date(date);
+      nightStart2.setHours(21, 0, 0, 0);
+      const nightEnd2 = new Date(date);
+      nightEnd2.setHours(24, 0, 0, 0);
+      const nextDayStart = new Date(date);
+      nextDayStart.setDate(date.getDate() + 1);
+      nextDayStart.setHours(0, 0, 0, 0);
+      const nextDayEnd = new Date(date);
+      nextDayEnd.setDate(date.getDate() + 1);
+      nextDayEnd.setHours(6, 0, 0, 0);
+
+      const dayHours = overlapHours(start, end, dayStart, dayEnd);
+      const nightHours = overlapHours(start, end, nightStart1, nightEnd1)
+        + overlapHours(start, end, nightStart2, nightEnd2)
+        + overlapHours(start, end, nextDayStart, nextDayEnd);
+      const normale = Math.min(totalHours, SEUIL_NORMAL_JOUR);
+      const ot25 = Math.max(0, Math.min(dayHours, Math.max(0, totalHours - SEUIL_NORMAL_JOUR)));
+      const ot50 = Math.round(nightHours * 100) / 100;
+      const supp = Math.round((ot25 + ot50) * 100) / 100;
+      let info = "";
+      if (ot25 > 0 && ot50 > 0) {
+        info = `${ot25.toFixed(2)}h à 25%, ${ot50.toFixed(2)}h à 50%`;
+      } else if (ot50 > 0) {
+        info = `${ot50.toFixed(2)}h à 50%`;
+      } else if (ot25 > 0) {
+        info = `${ot25.toFixed(2)}h à 25%`;
+      }
+      return { total: totalHours, normale, supp, info };
+    }
+
+    async function fetchJoursFeries() {
+      try {
+        const jours = await appelApi("/api/jours_feries");
+        joursFeriesActifs = Array.isArray(jours) ? jours.filter((j) => j.actif) : [];
+      } catch (e) {
+        joursFeriesActifs = [];
+      }
+    }
+
+    async function ajouterJourFerie() {
+      const dateEl = document.getElementById("champJourFerieDate");
+      const nomEl = document.getElementById("champJourFerieNom");
+      const actifEl = document.getElementById("champJourFerieActif");
+      const comptabiliseEl = document.getElementById("champJourFerieComptabilise");
+      if (!dateEl || !nomEl || !actifEl || !comptabiliseEl) return;
+      const date = dateEl.value;
+      const nom = nomEl.value.trim();
+      if (!date || !nom) {
+        alert("Veuillez renseigner une date et un nom pour le jour férié.");
+        return;
+      }
+      try {
+        await appelApi("/api/jours_feries", {
+          method: "POST",
+          body: JSON.stringify({
+            date,
+            nom,
+            actif: actifEl.checked,
+            comptabilise_pour_techniciens_normaux: comptabiliseEl.checked,
+            est_musulman: false,
+            description: ""
+          })
+        });
+        dateEl.value = "";
+        nomEl.value = "";
+        actifEl.checked = true;
+        comptabiliseEl.checked = true;
+        await fetchJoursFeries();
+        await chargerAdministration();
+        actualiserVisibiliteWeekends();
+        if (utilisateurCourant) {
+          const weekBreakdown = document.getElementById("weekBreakdown");
+          if (weekBreakdown && weekBreakdown.innerHTML) {
+            resetForm();
+          }
+        }
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function basculerJourFerie(id, actif) {
+      try {
+        await appelApi(`/api/jours_feries/${id}`, { method: "PUT", body: JSON.stringify({ actif }) });
+        await fetchJoursFeries();
+        await chargerAdministration();
+        actualiserVisibiliteWeekends();
+        if (utilisateurCourant) {
+          const weekBreakdown = document.getElementById("weekBreakdown");
+          if (weekBreakdown && weekBreakdown.innerHTML) {
+            await rechargerVueSaisieCourante();
+          }
+        }
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function actualiserTotaux() {
+      let normal = 0;
+      let supp = 0;
+      joursAffiches.forEach((jour) => {
+        const total = Number(document.getElementById(`total_${jour}`)?.value || 0);
+        const suppVal = Number(document.getElementById(`supp_${jour}`)?.value || 0);
+        normal += Math.min(total, SEUIL_NORMAL_JOUR);
+        supp += suppVal;
+      });
+      document.getElementById("totalNormal").textContent = normal.toFixed(2);
+      document.getElementById("totalSupp").textContent = supp.toFixed(2);
+      document.getElementById("totalGlobal").textContent = (normal + supp).toFixed(2);
+    }
+
+    function remplirSemaine(donnees) {
+      const normalData = donnees?.heures_normales_par_jour || {};
+      const suppData = donnees?.heures_supplementaires_par_jour || {};
+      const congeData = donnees?.conges_par_jour || {};
+      joursAffiches.forEach((jour) => {
+        const normales = normalData[jour] ?? null;
+        const supp = suppData[jour] ?? null;
+        const total = (normales ? Number(normales) : 0) + (supp ? Number(supp) : 0);
+        const totalEl = document.getElementById(`total_${jour}`);
+        const suppEl = document.getElementById(`supp_${jour}`);
+        const suppInfoEl = document.getElementById(`suppInfo_${jour}`);
+        const congeEl = document.getElementById(`conge_${jour}`);
+        if (totalEl) totalEl.value = total.toFixed(2);
+        if (suppEl) suppEl.value = supp ?? '';
+        if (suppInfoEl) {
+          const date = semaineDates[jour];
+          if (supp && (isJourFerie(date) || isWeekend(date))) {
+            suppInfoEl.textContent = `${supp.toFixed(2)}h à 100%`;
+          } else if (supp) {
+            suppInfoEl.textContent = `${supp.toFixed(2)}h OT`;
+          } else {
+            suppInfoEl.textContent = "";
+          }
+        }
+        if (congeEl) congeEl.checked = Boolean(congeData[jour]);
+      });
+      actualiserTotaux();
+    }
+
+    function getSemaineValues() {
+      const normals = {};
+      const supps = {};
+      const conges = {};
+      const role = utilisateurCourant ? utilisateurCourant.role : "";
+      joursAffiches.forEach((jour) => {
+        const totalValue = Number(document.getElementById(`total_${jour}`)?.value || 0);
+        const congeValue = document.getElementById(`conge_${jour}`).checked;
+        const date = semaineDates[jour];
+        const estFerie = isJourFerie(date);
+        const estWeekend = isWeekend(date);
+        const comptabilise = estJourFerieComptabilisePourRole(date);
+
+        if (congeValue || totalValue === 0) {
+          normals[jour] = null;
+          supps[jour] = null;
+          conges[jour] = congeValue;
+          return;
+        }
+
+        if (estFerie && !comptabilise && (role === 'technicien' || role === 'superviseur')) {
+          normals[jour] = null;
+          supps[jour] = null;
+          conges[jour] = congeValue;
+          return;
+        }
+
+        if (estFerie || estWeekend) {
+          normals[jour] = null;
+          supps[jour] = Number(totalValue.toFixed(2));
+        } else {
+          const normale = Number(Math.min(totalValue, SEUIL_NORMAL_JOUR).toFixed(2));
+          normals[jour] = totalValue === 0 ? null : normale;
+          supps[jour] = Number(Math.max(0, totalValue - normale).toFixed(2));
+        }
+        conges[jour] = congeValue;
+      });
+      return { normals, supps, conges };
+    }
+
+    function resetForm() {
+      document.getElementById("champOT").value = "";
+      document.getElementById("champEquipement").value = "";
+      document.getElementById("champType").value = "preventive";
+      document.getElementById("champDescription").value = "";
+      document.getElementById("champJustificationOT").value = "";
+      document.getElementById("champCommentaires").value = "";
+      document.getElementById("champFichiers").value = "";
+      document.getElementById("titreFormulaire").textContent = "Nouvelle demande";
+      document.getElementById("btnAnnulerEdition").style.display = "none";
+      demandeEnEditionId = null;
+      JOURS.forEach((jour) => {
+        const startEl = document.getElementById(`start_${jour}`);
+        const endEl = document.getElementById(`end_${jour}`);
+        const totalEl = document.getElementById(`total_${jour}`);
+        const suppEl = document.getElementById(`supp_${jour}`);
+        const congeEl = document.getElementById(`conge_${jour}`);
+        if (startEl) startEl.value = '';
+        if (endEl) endEl.value = '';
+        if (totalEl) totalEl.value = '0.00';
+        if (suppEl) suppEl.value = '';
+        if (document.getElementById(`suppInfo_${jour}`)) {
+          document.getElementById(`suppInfo_${jour}`).textContent = '';
+        }
+        if (congeEl) congeEl.checked = false;
+      });
+      const periodeLabel = document.getElementById('periodeSemaine');
+      if (periodeLabel) {
+        periodeLabel.textContent = formatWeekRange(new Date());
+      }
+      actualiserTotaux();
+      actualiserVisibiliteWeekends();
+    }
+
+    function setFormForDemande(demande) {
+      document.getElementById("champOT").value = demande.ordre_travail_sap || "";
+      document.getElementById("champEquipement").value = demande.equipement || "";
+      document.getElementById("champType").value = demande.type_intervention || "preventive";
+      document.getElementById("champDescription").value = demande.description_travaux || "";
+      document.getElementById("champJustificationOT").value = demande.justification_ot || "";
+      document.getElementById("champCommentaires").value = demande.commentaires || "";
+      document.getElementById("champFichiers").value = "";
+      const periodeLabel = document.getElementById('periodeSemaine');
+      if (periodeLabel) {
+        periodeLabel.textContent = formatWeekRange(new Date(demande.date_demande));
+      }
+      remplirSemaine(demande);
+      document.getElementById("titreFormulaire").textContent = demande.statut === "retour_modification" ? `Demande à corriger #${demande.id}` : `Modifier la demande #${demande.id}`;
+      document.getElementById("btnAnnulerEdition").style.display = "inline-block";
+      demandeEnEditionId = demande.id;
+      actualiserVisibiliteWeekends();
+      if (demande.statut !== "brouillon" && demande.statut !== "retour_modification") {
+        const champs = ["champOT", "champEquipement", "champType", "champDescription", "champJustificationOT", "champCommentaires", "champFichiers"];
+        JOURS.forEach((jour) => {
+          champs.push(`start_${jour}`);
+          champs.push(`end_${jour}`);
+          champs.push(`conge_${jour}`);
+        });
+        champs.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.disabled = true;
+          }
+        });
+      }
+    }
+
+    function annulerEdition() {
+      resetForm();
+    }
+
+    function verrouillerFormulaire(verrouille) {
+      const ids = ["champOT", "champEquipement", "champType", "champDescription", "champJustificationOT", "champCommentaires", "champFichiers"];
+      JOURS.forEach((jour) => {
+        ids.push(`start_${jour}`);
+        ids.push(`end_${jour}`);
+        ids.push(`conge_${jour}`);
+      });
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.disabled = verrouille;
+        }
+      });
+      const btnSauvegarder = document.querySelector('button[onclick="creerDemande(false)"]');
+      const btnEnvoyer = document.querySelector('button[onclick="creerDemande(true)"]');
+      if (btnSauvegarder) btnSauvegarder.disabled = verrouille;
+      if (btnEnvoyer) btnEnvoyer.disabled = verrouille;
+    }
+
+    async function chargerAdministration() {
+      try {
+        const [utilisateurs, joursFeries] = await Promise.all([
+          appelApi("/api/utilisateurs"),
+          appelApi("/api/jours_feries"),
+        ]);
+
+        const conteneurUtilisateurs = document.getElementById("listeUtilisateursWeekend");
+        if (conteneurUtilisateurs) {
+          if (!utilisateurs.length) {
+            conteneurUtilisateurs.innerHTML = '<div class="empty">Aucun utilisateur à afficher.</div>';
+          } else {
+            conteneurUtilisateurs.innerHTML = utilisateurs.map((utilisateur) => `
+              <div style="display:grid; grid-template-columns: 1fr auto; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); align-items:center;">
+                <div style="display:grid; gap:8px;">
+                  <div>
+                    <div style="font-weight:700; color:var(--text);">${utilisateur.prenom} ${utilisateur.nom}</div>
+                    <div class="muted">${utilisateur.role.replace(/_/g, " ")} · ${utilisateur.matricule}</div>
+                  </div>
+                  <div class="row" style="gap:8px; align-items:center;">
+                    <input id="tel-${utilisateur.id}" type="tel" placeholder="Téléphone" value="${escapeHtml(utilisateur.numero_telephone || "")}" style="max-width:220px;" />
+                    <button class="btn-secondary" onclick="enregistrerTelephoneUtilisateur(${utilisateur.id})">Enregistrer</button>
+                  </div>
+                  <div class="muted">${utilisateur.numero_telephone ? `Téléphone actuel : ${utilisateur.numero_telephone}` : "Aucun téléphone renseigné"}</div>
+                </div>
+                <button class="btn-secondary" onclick="basculerAutorisationWeekend(${utilisateur.id})">${utilisateur.autorise_weekend ? "Désactiver" : "Activer"}</button>
+              </div>
+            `).join("");
+          }
+        }
+
+        const conteneurJoursFeries = document.getElementById("listeJoursFeriesAdmin");
+        if (conteneurJoursFeries) {
+          if (!joursFeries.length) {
+            conteneurJoursFeries.innerHTML = '<div class="empty">Aucun jour férié renseigné.</div>';
+          } else {
+            conteneurJoursFeries.innerHTML = joursFeries.map((jour) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border);">
+                <div>
+                  <div style="font-weight:700; color:var(--text);">${jour.nom}</div>
+                  <div class="muted">${formatDateLong(new Date(jour.date))}</div>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                  <label style="display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px;">
+                    <input type="checkbox" ${jour.actif ? "checked" : ""} onchange="basculerJourFerie(${jour.id}, this.checked)" />
+                    <span>${jour.actif ? "Actif" : "Inactif"}</span>
+                  </label>
+                  <label style="display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px;">
+                    <input type="checkbox" ${jour.comptabilise_pour_techniciens_normaux !== false ? "checked" : ""} onchange="basculerComptabilisationJourFerie(${jour.id}, this.checked)" />
+                    <span>${jour.comptabilise_pour_techniciens_normaux !== false ? "Comptabilisé" : "Non comptabilisé"}</span>
+                  </label>
+                </div>
+              </div>
+            `).join("");
+          }
+        }
+      } catch (e) {
+        const conteneurUtilisateurs = document.getElementById("listeUtilisateursWeekend");
+        if (conteneurUtilisateurs) conteneurUtilisateurs.innerHTML = `<div class="empty">${e.message}</div>`;
+        const conteneurJoursFeries = document.getElementById("listeJoursFeriesAdmin");
+        if (conteneurJoursFeries) conteneurJoursFeries.innerHTML = `<div class="empty">${e.message}</div>`;
+      }
+    }
+
+    async function basculerAutorisationWeekend(id) {
+      try {
+        const utilisateur = (await appelApi("/api/utilisateurs")).find((item) => item.id === id);
+        const valeur = utilisateur ? !utilisateur.autorise_weekend : true;
+        await appelApi(`/api/utilisateurs/${id}/autorise_weekend`, {
+          method: "PUT",
+          body: JSON.stringify({ autorise_weekend: valeur })
+        });
+        await chargerAdministration();
+        await rafraichirProfilUtilisateur();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function enregistrerTelephoneUtilisateur(id) {
+      try {
+        const input = document.getElementById(`tel-${id}`);
+        if (!input) throw new Error("Champ téléphone introuvable");
+        await appelApi(`/api/utilisateurs/${id}/telephone`, {
+          method: "PUT",
+          body: JSON.stringify({ numero_telephone: input.value.trim() }),
+        });
+        await chargerAdministration();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function basculerJourFerie(id, actif) {
+      try {
+        const jours = await appelApi("/api/jours_feries");
+        const jour = jours.find((item) => item.id === id);
+        if (!jour) throw new Error("Jour férié introuvable");
+        await appelApi(`/api/jours_feries/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            date: jour.date,
+            nom: jour.nom,
+            est_musulman: Boolean(jour.est_musulman),
+            actif,
+            comptabilise_pour_techniciens_normaux: Boolean(jour.comptabilise_pour_techniciens_normaux !== false),
+            description: jour.description || "",
+          }),
+        });
+        await chargerAdministration();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function basculerComptabilisationJourFerie(id, comptabilise) {
+      try {
+        const jours = await appelApi("/api/jours_feries");
+        const jour = jours.find((item) => item.id === id);
+        if (!jour) throw new Error("Jour férié introuvable");
+        await appelApi(`/api/jours_feries/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            date: jour.date,
+            nom: jour.nom,
+            est_musulman: Boolean(jour.est_musulman),
+            actif: Boolean(jour.actif),
+            comptabilise_pour_techniciens_normaux: comptabilise,
+            description: jour.description || "",
+          }),
+        });
+        await fetchJoursFeries();
+        await chargerAdministration();
+        actualiserVisibiliteWeekends();
+        if (utilisateurCourant) {
+          const weekBreakdown = document.getElementById("weekBreakdown");
+          if (weekBreakdown && weekBreakdown.innerHTML) {
+            await rechargerVueSaisieCourante();
+          }
+        }
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function capturerEtatFormulaire() {
+      const champs = ["champOT", "champEquipement", "champType", "champDescription", "champJustificationOT", "champCommentaires"];
+      const valeurs = {};
+      champs.forEach((id) => {
+        const el = document.getElementById(id);
+        valeurs[id] = el ? el.value : "";
+      });
+      return {
+        champs: valeurs,
+        semaine: getSemaineValues(),
+      };
+    }
+
+    function restaurerEtatFormulaire(etat) {
+      if (!etat) return;
+      Object.entries(etat.champs || {}).forEach(([id, valeur]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = valeur;
+      });
+      if (etat.semaine) {
+        remplirSemaine({
+          heures_normales_par_jour: etat.semaine.normals,
+          heures_supplementaires_par_jour: etat.semaine.supps,
+          conges_par_jour: etat.semaine.conges,
+        });
+      }
+      actualiserTotaux();
+    }
+
+    async function rechargerVueSaisieCourante() {
+      if (!utilisateurCourant) return;
+      const etat = capturerEtatFormulaire();
+      if (utilisateurCourant.role === "administrateur") {
+        await chargerAdministration();
+        return;
+      }
+      if (utilisateurCourant.role && utilisateurCourant.role.startsWith("technicien")) {
+        await chargerDemandesTechnicien();
+        restaurerEtatFormulaire(etat);
+        return;
+      }
+      if (utilisateurCourant.role && utilisateurCourant.role.startsWith("superviseur")) {
+        await chargerDemandesSuperviseur();
+      }
+    }
+
+    async function appelApi(chemin, options = {}) {
+      const entetes = {};
+      if (!(options.body instanceof FormData)) {
+        entetes["Content-Type"] = "application/json";
+      }
+      if (token) entetes.Authorization = "Bearer " + token;
+      const reponse = await fetch(API + chemin, { ...options, headers: entetes });
+      if (!reponse.ok) {
+        const corps = await reponse.json().catch(() => ({}));
+        throw new Error(corps.detail || (`Erreur ${reponse.status}`));
+      }
+      return reponse.status === 204 ? null : reponse.json();
+    }
+
+    async function rafraichirProfilUtilisateur() {
+      if (!token || !utilisateurCourant) return;
+      try {
+        const data = await appelApi("/api/me");
+        const ancienAutoriseWeekend = Boolean(utilisateurCourant.autorise_weekend);
+        utilisateurCourant = { ...utilisateurCourant, ...data, autorise_weekend: Boolean(data.autorise_weekend) };
+        const texteUtilisateur = document.getElementById("texteUtilisateur");
+        if (texteUtilisateur) {
+          texteUtilisateur.textContent = `${utilisateurCourant.prenom} ${utilisateurCourant.nom} · ${utilisateurCourant.role}`;
+        }
+        if (ancienAutoriseWeekend !== Boolean(utilisateurCourant.autorise_weekend)) {
+          actualiserVisibiliteWeekends();
+          if (document.getElementById("weekBreakdown")?.innerHTML) {
+            await rechargerVueSaisieCourante();
+          }
+        }
+      } catch (e) {
+        // ignore and keep current session state
+      }
+    }
+
+    function demarrerPollUtilisateur() {
+      if (refreshUserTimer) return;
+      refreshUserTimer = window.setInterval(() => {
+        rafraichirProfilUtilisateur();
+      }, 5000);
+    }
+
+    function arreterPollUtilisateur() {
+      if (refreshUserTimer) {
+        window.clearInterval(refreshUserTimer);
+        refreshUserTimer = null;
+      }
+    }
+
+    function actualiserExportButton() {
+      const statut = document.getElementById("selectExportStatut").value;
+      document.getElementById("btnExporter").textContent = statut ? `⬇ Exporter ${LIBELLES_STATUT[statut] || "filtré"}` : "⬇ Exporter toutes";
+    }
+
+    async function exporterDemandes() {
+      try {
+        const statut = document.getElementById("selectExportStatut").value;
+        const url = API + "/api/demandes/export" + (statut ? `?statut=${encodeURIComponent(statut)}` : "");
+        const reponse = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: "Bearer " + token },
+        });
+        if (!reponse.ok) {
+          const corps = await reponse.json().catch(() => ({}));
+          throw new Error(corps.detail || (`Erreur ${reponse.status}`));
+        }
+        const blob = await reponse.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = statut ? `export_demandes_${statut}.csv` : "export_demandes.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function basculerMotDePasseOublie() {
+      const bloc = document.getElementById("blocMotDePasseOublie");
+      if (!bloc) return;
+      bloc.classList.toggle("hidden");
+    }
+
+    async function demanderReinitialisationMotDePasse() {
+      const erreur = document.getElementById("erreurConnexion");
+      const email = document.getElementById("champEmailReset").value.trim();
+      if (!email) {
+        erreur.textContent = "Veuillez saisir votre adresse email.";
+        return;
+      }
+      try {
+        const resultat = await appelApi("/api/auth/mot-de-passe-oublie", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        });
+        erreur.textContent = resultat.message || "Code envoyé par email.";
+      } catch (e) {
+        erreur.textContent = e.message;
+      }
+    }
+
+    async function reinitialiserMotDePasse() {
+      const erreur = document.getElementById("erreurConnexion");
+      const email = document.getElementById("champEmailReset").value.trim();
+      const code = document.getElementById("champCodeReset").value.trim();
+      const nouveauMotDePasse = document.getElementById("champNouveauMdp").value;
+      const confirmation = document.getElementById("champConfirmationMdp").value;
+      if (!email || !code || !nouveauMotDePasse) {
+        erreur.textContent = "Veuillez remplir tous les champs de réinitialisation.";
+        return;
+      }
+      if (nouveauMotDePasse !== confirmation) {
+        erreur.textContent = "Les mots de passe ne correspondent pas.";
+        return;
+      }
+      try {
+        const resultat = await appelApi("/api/auth/mot-de-passe-reinitialiser", {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            code,
+            nouveau_mot_de_passe: nouveauMotDePasse,
+          }),
+        });
+        erreur.textContent = resultat.message || "Mot de passe réinitialisé.";
+        document.getElementById("champCodeReset").value = "";
+        document.getElementById("champNouveauMdp").value = "";
+        document.getElementById("champConfirmationMdp").value = "";
+      } catch (e) {
+        erreur.textContent = e.message;
+      }
+    }
+
+    async function connecter() {
+      const matricule = document.getElementById("champMatricule").value.trim();
+      const mot_de_passe = document.getElementById("champMdp").value;
+      const zoneErreur = document.getElementById("erreurConnexion");
+      zoneErreur.textContent = "";
+      try {
+        const data = await appelApi("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ matricule, mot_de_passe }),
+        });
+        token = data.access_token;
+        utilisateurCourant = data;
+        await afficherApplication();
+      } catch (e) {
+        zoneErreur.textContent = e.message;
+      }
+    }
+
+    function deconnecter() {
+      arreterPollUtilisateur();
+      token = null;
+      utilisateurCourant = null;
+      demandeEnEditionId = null;
+      document.getElementById("vueApp").style.display = "none";
+      document.getElementById("ecranConnexion").style.display = "flex";
+      document.getElementById("champMdp").value = "";
+    }
+
+    async function afficherApplication() {
+      document.getElementById("ecranConnexion").style.display = "none";
+      document.getElementById("vueApp").style.display = "block";
+      document.getElementById("texteUtilisateur").textContent = `${utilisateurCourant.prenom} ${utilisateurCourant.nom} · ${utilisateurCourant.role}`;
+      document.getElementById("vueAdmin").classList.add("hidden");
+      document.getElementById("vueTechnicien").classList.add("hidden");
+      document.getElementById("vueSuperviseur").classList.add("hidden");
+      demarrerPollUtilisateur();
+      const isAdmin = utilisateurCourant.role === "administrateur";
+      document.getElementById("btnExporter").classList.toggle("hidden", !isAdmin);
+      document.getElementById("selectExportStatut").classList.toggle("hidden", !isAdmin);
+      document.getElementById("btnToggleArchived").classList.toggle("hidden", !(isAdmin || utilisateurCourant.role.startsWith("superviseur")));
+      if (isAdmin) {
+        actualiserExportButton();
+      }
+      await fetchJoursFeries();
+      if (isAdmin) {
+        document.getElementById("vueAdmin").classList.remove("hidden");
+        chargerAdministration();
+        return;
+      }
+      // Role mapping : both 'technicien' and 'technicien_shift' use the technicien UI
+      if (utilisateurCourant.role && utilisateurCourant.role.startsWith("technicien")) {
+        document.getElementById("vueTechnicien").classList.remove("hidden");
+        resetForm();
+        chargerDemandesTechnicien();
+      } else if (utilisateurCourant.role && utilisateurCourant.role.startsWith("superviseur")) {
+        document.getElementById("vueSuperviseur").classList.remove("hidden");
+        chargerDemandesSuperviseur();
+      } else {
+        // default to technicien view for unknown roles
+        document.getElementById("vueTechnicien").classList.remove("hidden");
+        resetForm();
+        chargerDemandesTechnicien();
+      }
+    }
+
+    function badgeStatut(statut) {
+      const cls = `pill-${statut}`;
+      return `<span class="pill ${cls}">${LIBELLES_STATUT[statut] || statut}</span>`;
+    }
+
+    function formaterPeriode(dateStr) {
+      if (!dateStr) return "Semaine";
+      const date = new Date(`${dateStr}T00:00:00`);
+      const day = date.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const start = new Date(date);
+      start.setDate(date.getDate() + diff);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      return `Semaine du ${format(start)} au ${format(end)}`;
+    }
+
+    function formatWeekRange(date) {
+      const day = date.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const start = new Date(date);
+      start.setDate(date.getDate() + diff);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      return `Période : ${format(start)} - ${format(end)}`;
+    }
+
+    function renderBreakdown(demande) {
+      const normals = demande?.heures_normales_par_jour || {};
+      const supps = demande?.heures_supplementaires_par_jour || {};
+      const conges = demande?.conges_par_jour || {};
+      const joursEnvoyes = JOURS.filter((jour) => {
+        const normal = normals[jour];
+        const supp = supps[jour];
+        const conge = conges[jour];
+        const total = (normal ? Number(normal) : 0) + (supp ? Number(supp) : 0);
+        return conge || total > 0;
+      });
+      if (!joursEnvoyes.length) {
+        return `<div class="request-meta" style="margin-top:12px;">
+          <div style="font-weight:700; color:var(--text); margin-bottom:8px;">${formaterPeriode(demande.date_demande)}</div>
+          <div class="muted">Aucun jour saisi.</div>
+        </div>`;
+      }
+      return `<div class="request-meta" style="margin-top:12px;">
+        <div style="font-weight:700; color:var(--text); margin-bottom:8px;">${formaterPeriode(demande.date_demande)}</div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
+          ${joursEnvoyes.map((jour) => `
+            <div style="border:1px solid var(--border); border-radius:10px; padding:10px; background:rgba(255,255,255,.03);">
+              <div style="font-weight:700; color:var(--accent); margin-bottom:6px;">${LIBELLES_JOURS[jour]}</div>
+              <div>Heures normales : <b>${formatHeures(normals[jour])}</b></div>
+              <div>Heures supp. : <b>${formatHeures(supps[jour])}</b></div>
+              <div>Congé : <b>${conges[jour] ? "Oui" : "Non"}</b></div>
+            </div>
+          `).join("")}
+        </div>
+        <div style="margin-top:10px; padding:10px; border-radius:10px; background:rgba(47,125,224,0.06); color:var(--text);">
+          <b>Motif / raison des heures supplémentaires :</b> ${escapeHtml(demande.justification_ot || "—")}
+        </div>
+      </div>`;
+    }
+
+    async function creerDemande(soumettre) {
+      const zoneErreur = document.getElementById("erreurDemande");
+      zoneErreur.textContent = "";
+       
+      // Validation: il faut avoir rempli au moins une période
+      const { normals, supps, conges } = getSemaineValues();
+      const hasAnyDay = Object.values(normals).some(v => v !== null) || 
+                       Object.values(supps).some(v => v !== null) || 
+                       Object.values(conges).some(v => v === true);
+      if (!hasAnyDay) {
+        zoneErreur.textContent = "Vous devez remplir au moins un jour de la période hebdomadaire.";
+        return;
+      }
+       
+      // Validation: si heures supplémentaires, justification est obligatoire
+      const totalSupp = Object.values(supps).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+      const justification = document.getElementById("champJustificationOT").value.trim();
+      if (totalSupp > 0 && !justification) {
+        zoneErreur.textContent = "Vous devez justifier les heures supplémentaires avant de sauvegarder.";
+        return;
+      }
+       
+      // Validation: pièces jointes sont obligatoires
+      const fichiers = document.getElementById("champFichiers").files;
+      if (fichiers.length === 0) {
+        zoneErreur.textContent = "Vous devez ajouter au moins une pièce jointe avant de sauvegarder.";
+        return;
+      }
+       
+      if (soumettre && !demandeEnEditionId) {
+        zoneErreur.textContent = "Sauvegardez d'abord la demande en brouillon avant de l'envoyer au superviseur.";
+        return;
+      }
+      if (!demandeEnEditionId) {
+        const demandesExistantes = await appelApi("/api/demandes");
+        const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(new Date()));
+        if (demandeDuJour) {
+          zoneErreur.textContent = "Une seule demande est autorisée par jour. Modifiez la demande existante.";
+          return;
+        }
+      }
+      const formData = new FormData();
+      formData.append("ordre_travail_sap", document.getElementById("champOT").value);
+      formData.append("equipement", document.getElementById("champEquipement").value);
+      formData.append("type_intervention", document.getElementById("champType").value);
+      formData.append("description_travaux", document.getElementById("champDescription").value);
+      formData.append("justification_ot", document.getElementById("champJustificationOT").value);
+      formData.append("commentaires", document.getElementById("champCommentaires").value);
+      formData.append("heures_normales_par_jour", JSON.stringify(normals));
+      formData.append("heures_supplementaires_par_jour", JSON.stringify(supps));
+      formData.append("conges_par_jour", JSON.stringify(conges));
+      formData.append("soumettre", soumettre ? "true" : "false");
+      for (let i = 0; i < fichiers.length; i++) {
+        formData.append("fichiers", fichiers[i]);
+      }
+      try {
+        if (demandeEnEditionId) {
+          const demande = await appelApi(`/api/demandes/${demandeEnEditionId}`, { method: "PUT", body: JSON.stringify({
+            ordre_travail_sap: document.getElementById("champOT").value,
+            equipement: document.getElementById("champEquipement").value,
+            type_intervention: document.getElementById("champType").value,
+            description_travaux: document.getElementById("champDescription").value,
+            justification_ot: document.getElementById("champJustificationOT").value,
+            commentaires: document.getElementById("champCommentaires").value,
+            heures_normales_par_jour: normals,
+            heures_supplementaires_par_jour: supps,
+            conges_par_jour: conges,
+            soumettre,
+          }) });
+          if (soumettre) {
+            resetForm();
+            document.getElementById("erreurDemande").textContent = "Demande envoyée.";
+          } else {
+            document.getElementById("titreFormulaire").textContent = `Brouillon enregistré #${demande.id}`;
+            document.getElementById("btnAnnulerEdition").style.display = "inline-block";
+            demandeEnEditionId = demande.id;
+            verrouillerFormulaire(false);
+            document.getElementById("erreurDemande").textContent = "Brouillon sauvegardé.";
+          }
+        } else {
+          const demande = await appelApi("/api/demandes", { method: "POST", body: formData });
+          if (!soumettre) {
+            document.getElementById("titreFormulaire").textContent = `Brouillon enregistré #${demande.id}`;
+            document.getElementById("btnAnnulerEdition").style.display = "inline-block";
+            demandeEnEditionId = demande.id;
+            verrouillerFormulaire(false);
+            document.getElementById("erreurDemande").textContent = "Brouillon sauvegardé.";
+          } else {
+            document.getElementById("erreurDemande").textContent = "Demande envoyée.";
+          }
+        }
+        chargerDemandesTechnicien();
+      } catch (e) {
+        zoneErreur.textContent = e.message;
+      }
+    }
+
+    async function chargerDemandesTechnicien() {
+      const conteneur = document.getElementById("listeDemandesTechnicien");
+      try {
+        const demandes = await appelApi("/api/demandes");
+        initialiserSemaine(calculerJoursAffichesTechnicien(demandes, utilisateurCourant ? utilisateurCourant.role : ""));
+        const soumises = demandes.filter((d) => d.statut !== "brouillon");
+        const totalHeures = soumises.reduce((acc, d) => acc + Number(d.heures_travaillees || 0), 0);
+        const totalSupp = soumises.reduce((acc, d) => acc + Number(d.heures_supplementaires || 0), 0);
+        const attente = soumises.filter((d) => d.statut === "en_attente").length;
+
+        const resume = `
+          <div class="card" style="padding: 16px; margin-bottom: 16px;">
+            <h2>Résumé de mes demandes envoyées</h2>
+            <div class="grid-3">
+              <div class="card" style="padding: 14px; margin-bottom: 0;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--accent);">${soumises.length}</div>
+                <div class="muted">Demandes envoyées</div>
+              </div>
+              <div class="card" style="padding: 14px; margin-bottom: 0;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--warning);">${formatHeures(totalHeures)} h</div>
+                <div class="muted">Heures enregistrées</div>
+              </div>
+              <div class="card" style="padding: 14px; margin-bottom: 0;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--success);">${formatHeures(totalSupp)} h</div>
+                <div class="muted">Heures supplémentaires</div>
+              </div>
+            </div>
+            <div class="muted" style="margin-top: 10px;">${attente} demande(s) en attente de validation.</div>
+          </div>
+        `;
+
+        if (demandes.length === 0) {
+          conteneur.innerHTML = `${resume}<div class="empty">Aucune demande pour le moment.</div>`;
+          return;
+        }
+
+        // Group by period (week)
+        const groupesPeriodes = {};
+        demandes.forEach((d) => {
+          const periodeLabel = formaterPeriode(d.date_demande);
+          if (!groupesPeriodes[periodeLabel]) {
+            groupesPeriodes[periodeLabel] = [];
+          }
+          groupesPeriodes[periodeLabel].push(d);
+        });
+
+        // Render sections for each period
+        const sections = Object.keys(groupesPeriodes)
+          .sort()
+          .map((periodeLabel) => {
+            const demandesPeriode = groupesPeriodes[periodeLabel];
+            return renderPeriodSectionTechnicien(periodeLabel, demandesPeriode);
+          })
+          .join("");
+
+        conteneur.innerHTML = `${resume}<div>${sections}</div>`;
+      } catch (e) {
+        conteneur.innerHTML = `<div class="empty">${e.message}</div>`;
+      }
+    }
+
+    function renderPeriodSectionTechnicien(periodeLabel, demandes) {
+      // Calculate totals for the period
+      let totalNormales = 0;
+      let totalSupp = 0;
+      
+      demandes.forEach((d) => {
+        const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+        const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+        totalNormales += normales;
+        totalSupp += supp;
+      });
+
+      const demandesHtml = demandes.map((d) => {
+        const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+        const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+        const canEdit = d.statut === "brouillon" || d.statut === "retour_modification";
+        const requestClass = canEdit ? "request" : "request request-locked";
+        const editLabel = d.statut === "retour_modification" ? "Corriger" : "Modifier";
+        return `
+          <div class="${requestClass}">
+            <div class="request-header">
+              <div>
+                <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+                <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
+                <div class="request-meta">OT réalisé : ${escapeHtml(d.ordre_travail_sap || "—")}</div>
+                <div class="request-meta">Normales : <b>${formatHeures(normales)}h</b> · supp. : <b>${formatHeures(supp)}h</b></div>
+              </div>
+              ${badgeStatut(d.statut)}
+            </div>
+            ${d.statut === "retour_modification" ? '<div class="muted" style="margin-top:8px;">Demande retournée par le superviseur. Vous pouvez corriger puis renvoyer.</div>' : (d.statut !== "brouillon" ? '<div class="muted" style="margin-top:8px;">Demande envoyée au superviseur. Lecture seule.</div>' : "")}
+            <div class="request-meta" style="margin-top:10px;">Détails des travaux : ${escapeHtml(d.description_travaux || "—")}</div>
+            ${renderBreakdown(d)}
+            <div class="row" style="margin-top: 12px;">
+              ${canEdit ? `<button class="btn-secondary" onclick="editerDemande(${d.id})">${editLabel}</button>` : ""}
+              ${d.statut === 'brouillon' ? `<button class="btn-danger" onclick="supprimerDemande(${d.id})">Supprimer</button>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <section class="status-section">
+          <div class="status-section-header periode-header">
+            <div>
+              <strong>${escapeHtml(periodeLabel)}</strong><br />
+              <span>${demandes.length} demande(s)</span>
+            </div>
+            <div style="display: flex; gap: 16px; align-items: center; font-size: 14px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 18px;">⏱</span>
+                <div><span class="muted">Normales :</span> <b>${formatHeures(totalNormales)}h</b></div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 18px;">⚡</span>
+                <div><span class="muted">Supp. :</span> <b>${formatHeures(totalSupp)}h</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="status-section-body">
+            <div class="request-grid">
+              ${demandesHtml}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    async function editerDemande(id) {
+      try {
+        const demandes = await appelApi("/api/demandes");
+        const demande = demandes.find((item) => item.id === id);
+        if (!demande) throw new Error("Demande introuvable");
+        setFormForDemande(demande);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function supprimerDemande(id) {
+      if (!confirm('Confirmer la suppression de cette demande (brouillon) ?')) return;
+      try {
+        await appelApi(`/api/demandes/${id}`, { method: 'DELETE' });
+        chargerDemandesTechnicien();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function chargerDemandesSuperviseur() {
+      const conteneur = document.getElementById("listeDemandesSuperviseur");
+      try {
+        const isAdmin = utilisateurCourant && utilisateurCourant.role === 'administrateur';
+        const url = "/api/demandes" + (isAdmin && adminViewingArchived ? "?archived=true" : "");
+        const demandes = await appelApi(url);
+        const filtres = getSupervisorFilters();
+        const demandesFiltrees = demandes.filter((demande) => filtreDemandeSuperviseur(demande, filtres));
+        document.getElementById("statAttente").textContent = demandesFiltrees.filter((d) => d.statut === "en_attente").length;
+        document.getElementById("statApprouvees").textContent = demandesFiltrees.filter((d) => d.statut === "approuvee").length;
+        document.getElementById("statRejetees").textContent = demandesFiltrees.filter((d) => d.statut === "rejetee").length;
+        if (demandesFiltrees.length === 0) {
+          conteneur.innerHTML = '<div class="empty">Aucune demande ne correspond aux filtres.</div>';
+          return;
+        }
+
+        // Group by technicien
+        const groupesTechniciens = {};
+        demandesFiltrees.forEach((demande) => {
+          const nomTechnicien = `${demande.technicien_prenom || ""} ${demande.technicien_nom || ""}`.trim() || "Technicien inconnu";
+          if (!groupesTechniciens[nomTechnicien]) {
+            groupesTechniciens[nomTechnicien] = [];
+          }
+          groupesTechniciens[nomTechnicien].push(demande);
+        });
+
+        // Sort by technicien name and render sections
+        const sections = Object.keys(groupesTechniciens)
+          .sort()
+          .map((nomTechnicien) => {
+            const demandesTechnicien = groupesTechniciens[nomTechnicien];
+            return renderSectionDemandeTechnicien(nomTechnicien, demandesTechnicien, !(isAdmin && adminViewingArchived));
+          })
+          .join("");
+        conteneur.innerHTML = sections;
+      } catch (e) {
+        conteneur.innerHTML = `<div class="empty">${e.message}</div>`;
+      }
+    }
+
+    async function valider(id, action) {
+      const commentInput = document.getElementById(`comment-${id}`);
+      const commentaire = commentInput ? commentInput.value.trim() : "";
+      if (!commentaire) {
+        alert("Un commentaire est requis avant de confirmer une demande.");
+        return;
+      }
+      try {
+        await appelApi(`/api/demandes/${id}/valider`, {
+          method: "PUT",
+          body: JSON.stringify({ action, commentaire }),
+        });
+        chargerDemandesSuperviseur();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function restaurerDemande(id) {
+      if (!confirm('Restaurer cette demande depuis les archives ?')) return;
+      try {
+        await appelApi(`/api/demandes/${id}/restore`, { method: 'PUT' });
+        chargerDemandesSuperviseur();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function toggleArchived() {
+      adminViewingArchived = !adminViewingArchived;
+      document.getElementById('btnToggleArchived').textContent = adminViewingArchived ? 'Voir actives' : 'Voir archivées';
+      chargerDemandesSuperviseur();
+    }
+
+    document.getElementById("champMdp").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") connecter();
+    });
+
+    initialiserSemaine();
+    resetForm();
+  </script>
+</body>
+</html>
