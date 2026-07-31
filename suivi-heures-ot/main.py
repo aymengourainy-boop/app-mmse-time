@@ -116,6 +116,33 @@ def peut_saisir_weekend(utilisateur: models.Utilisateur) -> bool:
     } or utilisateur.autorise_weekend
 
 
+def peut_saisir_jours_passes(utilisateur: models.Utilisateur) -> bool:
+    return bool(utilisateur.autorise_jours_passes)
+
+
+def payload_contient_jours_passes(
+    normales_par_jour: dict | None,
+    supplementaires_par_jour: dict | None,
+    conges_par_jour: dict | None,
+    reference: date_type,
+) -> bool:
+    clefs = set()
+    if normales_par_jour:
+        clefs.update(normales_par_jour.keys())
+    if supplementaires_par_jour:
+        clefs.update(supplementaires_par_jour.keys())
+    if conges_par_jour:
+        clefs.update(conges_par_jour.keys())
+
+    for cle in clefs:
+        if not jour_a_du_contenu(normales_par_jour, supplementaires_par_jour, conges_par_jour, cle):
+            continue
+        date_jour = date_depuis_cle(cle, reference)
+        if date_jour and date_jour < date_type.today():
+            return True
+    return False
+
+
 def verifier_date_demande_technicien_shift(date_demande: date_type, utilisateur: models.Utilisateur):
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if date_demande != date_type.today():
@@ -449,6 +476,7 @@ def login(requete: schemas.LoginRequete, db: Session = Depends(get_db)):
         prenom=utilisateur.prenom,
         utilisateur_id=utilisateur.id,
         autorise_weekend=bool(utilisateur.autorise_weekend),
+        autorise_jours_passes=bool(utilisateur.autorise_jours_passes),
     )
 
 
@@ -511,6 +539,7 @@ def me(utilisateur: models.Utilisateur = Depends(get_utilisateur_courant)):
         "matricule": utilisateur.matricule,
         "role": utilisateur.role.value,
         "autorise_weekend": bool(utilisateur.autorise_weekend),
+        "autorise_jours_passes": bool(utilisateur.autorise_jours_passes),
         "numero_telephone": utilisateur.numero_telephone,
     }
 
@@ -530,6 +559,7 @@ def lister_utilisateurs_pour_admin(
             "matricule": u.matricule,
             "role": u.role.value,
             "autorise_weekend": bool(u.autorise_weekend),
+            "autorise_jours_passes": bool(u.autorise_jours_passes),
             "numero_telephone": u.numero_telephone,
         }
         for u in db.query(models.Utilisateur)
@@ -558,6 +588,27 @@ def toggle_autorise_weekend(
     db.commit()
     db.refresh(cible)
     return {"id": cible.id, "autorise_weekend": bool(cible.autorise_weekend)}
+
+
+@app.put("/api/utilisateurs/{utilisateur_id}/autorise_jours_passes")
+def toggle_autorise_jours_passes(
+    utilisateur_id: int,
+    payload: schemas.AutoriseJoursPassesRequete | None = Body(default=None),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    db: Session = Depends(get_db),
+):
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    cible = db.get(models.Utilisateur, utilisateur_id)
+    if not cible:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if payload is None:
+        cible.autorise_jours_passes = not cible.autorise_jours_passes
+    else:
+        cible.autorise_jours_passes = payload.autorise_jours_passes
+    db.commit()
+    db.refresh(cible)
+    return {"id": cible.id, "autorise_jours_passes": bool(cible.autorise_jours_passes)}
 
 
 @app.put("/api/utilisateurs/{utilisateur_id}/telephone")
@@ -712,6 +763,10 @@ async def creer_demande(
                 date_jour = trouver_date_dans_demande(cle)
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisée pour votre rôle")
+
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+        if payload_contient_jours_passes(normales_dict, supps_dict, conges_dict, date_demande) and not peut_saisir_jours_passes(utilisateur):
+            raise HTTPException(status_code=403, detail="La saisie des jours passés nécessite l'autorisation d'un administrateur")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
@@ -1026,6 +1081,10 @@ def modifier_demande(
                 date_jour = date_depuis_cle(cle, date_demande)
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisée pour votre rôle")
+
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+        if payload_contient_jours_passes(normales_candidate, supps_candidate, conges_candidate, date_demande) and not peut_saisir_jours_passes(utilisateur):
+            raise HTTPException(status_code=403, detail="La modification des jours passés nécessite l'autorisation d'un administrateur")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if demande.date_demande < date_type.today() and not demande.autorise_modification_retro:

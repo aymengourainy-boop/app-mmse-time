@@ -622,7 +622,7 @@
           <h2>Administration rapide</h2>
           <div class="grid-2">
             <div class="card" style="padding: 16px; margin-bottom: 0;">
-              <h2>Autorisations week-end</h2>
+              <h2>Autorisations week-end / jours passés</h2>
               <div id="listeUtilisateursWeekend" class="muted">Chargement…</div>
             </div>
             <div class="card" style="padding: 16px; margin-bottom: 0;">
@@ -983,10 +983,11 @@
       const courant = new Date(reference);
       courant.setHours(0, 0, 0, 0);
       const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
+      const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
       return JOURS.filter((jour) => {
         const date = semaineDates[jour];
         if (!date) return false;
-        if (date.getTime() <= courant.getTime()) return false;
+        if (date.getTime() <= courant.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
           const day = date.getDay();
           if (day === 0 || day === 6) return false;
@@ -1012,6 +1013,7 @@
       weekStart.setHours(0, 0, 0, 0);
       weekEnd.setHours(23, 59, 59, 999);
       const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
+      const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
 
       const demandesEnvoyees = new Set();
       (demandes || []).forEach((demande) => {
@@ -1028,7 +1030,7 @@
         const date = semaineDates[jour];
         if (!date) return false;
         const dateCle = formatDateKey(date);
-        if (date.getTime() < aujourdHui.getTime()) return false;
+        if (date.getTime() <= aujourdHui.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
           const day = date.getDay();
           if (day === 0 || day === 6) return false;
@@ -1184,9 +1186,15 @@
 
         // Technicien shift : uniquement le jour courant
         if (role === 'technicien_shift') {
-          const mapping = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-          const todayLabel = mapping[(new Date()).getDay()];
-          JOURS.forEach((jour) => setEnabled(jour, jour === todayLabel));
+          const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          JOURS.forEach((jour) => {
+            const date = semaineDates[jour];
+            const isToday = Boolean(date && date.getTime() === today.getTime());
+            const isPastDay = Boolean(date && date.getTime() < today.getTime());
+            setEnabled(jour, isToday || (autoriseJoursPasses && isPastDay));
+          });
           return;
         }
 
@@ -1200,17 +1208,22 @@
         // - technicien (normal) : la ligne du jour est éditable ; si l'autorisation week-end est donnée, les week-ends deviennent aussi éditables
         // - superviseur (normal) : lun-ven éditables, week-end grisés sauf si compte autorise_weekend
         if (role === 'technicien') {
-          const mapping = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-          const todayLabel = mapping[(new Date()).getDay()];
-          const isWeekendToday = (todayLabel === 'samedi' || todayLabel === 'dimanche');
-          if (isWeekendToday && !autorise) {
-            return;
-          }
+          const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
           JOURS.forEach((jour) => {
             const date = semaineDates[jour];
             const isHolidayDay = Boolean(date && isJourFerie(date));
             const isWeekendDay = jour === 'samedi' || jour === 'dimanche';
-            const shouldEnable = autorise ? (isHolidayDay || isWeekendDay || jour === todayLabel) : (isHolidayDay || jour === todayLabel);
+            const isToday = Boolean(date && date.getTime() === today.getTime());
+            const isPastDay = Boolean(date && date.getTime() < today.getTime());
+            let shouldEnable = isHolidayDay || isToday;
+            if (autoriseJoursPasses && isPastDay) {
+              shouldEnable = true;
+            }
+            if (isWeekendDay && !autorise) {
+              shouldEnable = false;
+            }
             setEnabled(jour, shouldEnable);
           });
           return;
@@ -1579,7 +1592,10 @@
                   </div>
                   <div class="muted">${utilisateur.numero_telephone ? `Téléphone actuel : ${utilisateur.numero_telephone}` : "Aucun téléphone renseigné"}</div>
                 </div>
-                <button class="btn-secondary" onclick="basculerAutorisationWeekend(${utilisateur.id})">${utilisateur.autorise_weekend ? "Désactiver" : "Activer"}</button>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <button class="btn-secondary" onclick="basculerAutorisationWeekend(${utilisateur.id})">${utilisateur.autorise_weekend ? "Désactiver week-end" : "Activer week-end"}</button>
+                  <button class="btn-secondary" onclick="basculerAutorisationJoursPasses(${utilisateur.id})">${utilisateur.autorise_jours_passes ? "Désactiver jours passés" : "Activer jours passés"}</button>
+                </div>
               </div>
             `).join("");
           }
@@ -1625,6 +1641,21 @@
         await appelApi(`/api/utilisateurs/${id}/autorise_weekend`, {
           method: "PUT",
           body: JSON.stringify({ autorise_weekend: valeur })
+        });
+        await chargerAdministration();
+        await rafraichirProfilUtilisateur();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function basculerAutorisationJoursPasses(id) {
+      try {
+        const utilisateur = (await appelApi("/api/utilisateurs")).find((item) => item.id === id);
+        const valeur = utilisateur ? !utilisateur.autorise_jours_passes : true;
+        await appelApi(`/api/utilisateurs/${id}/autorise_jours_passes`, {
+          method: "PUT",
+          body: JSON.stringify({ autorise_jours_passes: valeur })
         });
         await chargerAdministration();
         await rafraichirProfilUtilisateur();
@@ -1764,12 +1795,13 @@
       try {
         const data = await appelApi("/api/me");
         const ancienAutoriseWeekend = Boolean(utilisateurCourant.autorise_weekend);
-        utilisateurCourant = { ...utilisateurCourant, ...data, autorise_weekend: Boolean(data.autorise_weekend) };
+        const ancienAutoriseJoursPasses = Boolean(utilisateurCourant.autorise_jours_passes);
+        utilisateurCourant = { ...utilisateurCourant, ...data, autorise_weekend: Boolean(data.autorise_weekend), autorise_jours_passes: Boolean(data.autorise_jours_passes) };
         const texteUtilisateur = document.getElementById("texteUtilisateur");
         if (texteUtilisateur) {
           texteUtilisateur.textContent = `${utilisateurCourant.prenom} ${utilisateurCourant.nom} · ${utilisateurCourant.role}`;
         }
-        if (ancienAutoriseWeekend !== Boolean(utilisateurCourant.autorise_weekend)) {
+        if (ancienAutoriseWeekend !== Boolean(utilisateurCourant.autorise_weekend) || ancienAutoriseJoursPasses !== Boolean(utilisateurCourant.autorise_jours_passes)) {
           actualiserVisibiliteWeekends();
           if (document.getElementById("weekBreakdown")?.innerHTML) {
             await rechargerVueSaisieCourante();

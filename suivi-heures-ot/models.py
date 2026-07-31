@@ -199,6 +199,7 @@ class Utilisateur(Base, TimestampMixin):
 
     actif: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     autorise_weekend: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    autorise_jours_passes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     derniere_connexion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     departement: Mapped["Departement"] = relationship(back_populates="utilisateurs")

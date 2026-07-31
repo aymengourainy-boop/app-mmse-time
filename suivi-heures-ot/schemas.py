@@ -26,6 +26,7 @@ class TokenReponse(BaseModel):
     prenom: str
     utilisateur_id: int
     autorise_weekend: bool = False
+    autorise_jours_passes: bool = False
 
 
 class MotDePasseOublieRequete(BaseModel):
@@ -61,6 +62,10 @@ class DemandeCreation(BaseModel):
 
 class AutoriseWeekendRequete(BaseModel):
     autorise_weekend: bool
+
+
+class AutoriseJoursPassesRequete(BaseModel):
+    autorise_jours_passes: bool
 
 
 class TelephoneUtilisateurRequete(BaseModel):

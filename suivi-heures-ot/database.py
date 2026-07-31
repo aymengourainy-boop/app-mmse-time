@@ -74,6 +74,9 @@ def ensure_schema():
         if "autorise_weekend" not in utilisateur_columns:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE utilisateurs ADD COLUMN autorise_weekend BOOLEAN NOT NULL DEFAULT 0"))
+        if "autorise_jours_passes" not in utilisateur_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE utilisateurs ADD COLUMN autorise_jours_passes BOOLEAN NOT NULL DEFAULT 0"))
         if "numero_telephone" not in utilisateur_columns:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE utilisateurs ADD COLUMN numero_telephone VARCHAR(30)"))
