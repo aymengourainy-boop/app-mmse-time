@@ -68,6 +68,9 @@ def ensure_schema():
     if "autorise_modification_retro" not in columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE demandes ADD COLUMN autorise_modification_retro BOOLEAN NOT NULL DEFAULT 0"))
+    if "localisation" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE demandes ADD COLUMN localisation JSON"))
 
     if inspector.has_table("utilisateurs"):
         utilisateur_columns = {column["name"] for column in inspector.get_columns("utilisateurs")}
@@ -127,6 +130,9 @@ def ensure_schema():
 
     if not inspector.has_table("mots_de_passe_oublies"):
         models.Base.metadata.create_all(bind=engine, tables=[models.MotDePasseOublie.__table__])
+
+    if not inspector.has_table("plannings_shift"):
+        models.Base.metadata.create_all(bind=engine, tables=[models.PlanningShift.__table__])
 
 
 def get_db():
