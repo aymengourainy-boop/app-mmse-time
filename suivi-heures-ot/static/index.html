@@ -773,6 +773,8 @@
     const API = "";
     const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
     const LIBELLES_JOURS = { lundi: "Lundi", mardi: "Mardi", mercredi: "Mercredi", jeudi: "Jeudi", vendredi: "Vendredi", samedi: "Samedi", dimanche: "Dimanche" };
+    const LOCALE_MAROC = "fr-MA";
+    const TIMEZONE_MAROC = "Africa/Casablanca";
 
     const SEUIL_NORMAL_JOUR = 9.0;
     let semaineDates = {};
@@ -780,14 +782,14 @@
     let joursAffiches = JOURS.slice();
     
     function formatDateShort(date) {
-      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      return formatDateMaroc(date, { day: "2-digit", month: "2-digit" });
     }
 
     function formatDateLong(date) {
-      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      return formatDateMaroc(date, { day: "2-digit", month: "long" });
     }
 
-    function calculerDebutSemaine(reference = new Date()) {
+    function calculerDebutSemaine(reference = maintenantMaroc()) {
       const jour = reference.getDay();
       const diff = jour === 0 ? -6 : 1 - jour;
       const debut = new Date(reference);
@@ -796,7 +798,7 @@
       return debut;
     }
 
-    function initialiserSemaineDates(reference = new Date()) {
+    function initialiserSemaineDates(reference = maintenantMaroc()) {
       const debut = calculerDebutSemaine(reference);
       semaineDates = {};
       JOURS.forEach((jour, index) => {
@@ -819,13 +821,37 @@
     let adminViewingArchived = false;
     let refreshUserTimer = null;
 
+    function maintenantMaroc() {
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: TIMEZONE_MAROC,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(new Date());
+      const valueOf = (type) => {
+        const part = parts.find((item) => item.type === type);
+        return part ? part.value : "00";
+      };
+      return new Date(`${valueOf("year")}-${valueOf("month")}-${valueOf("day")}T${valueOf("hour")}:${valueOf("minute")}:${valueOf("second")}`);
+    }
+
+    function formatDateMaroc(date, options) {
+      return date.toLocaleDateString(LOCALE_MAROC, Object.assign({ timeZone: TIMEZONE_MAROC }, options || {}));
+    }
+
     function formatHeures(value) {
       const num = Number(value || 0);
       return isNaN(num) ? "0.00" : num.toFixed(2);
     }
 
     function formatDateDemande(value) {
-      return new Date(`${value}T00:00:00`).toLocaleDateString("fr-FR", {
+      return new Date(`${value}T00:00:00`).toLocaleDateString(LOCALE_MAROC, {
+        timeZone: TIMEZONE_MAROC,
         weekday: "long",
         day: "2-digit",
         month: "2-digit",
@@ -979,40 +1005,34 @@
       return role === "technicien_shift" || role === "superviseur_shift";
     }
 
-    function obtenirJoursRestants(reference = new Date(), role = "") {
+    function obtenirJoursRestants(reference = maintenantMaroc(), role = "") {
       const courant = new Date(reference);
       courant.setHours(0, 0, 0, 0);
-      const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
       const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
       return JOURS.filter((jour) => {
         const date = semaineDates[jour];
         if (!date) return false;
-        if (date.getTime() <= courant.getTime() && !autoriseJoursPasses) return false;
-        if (!estRoleShift(role) && !autoriseWeekend) {
-          const day = date.getDay();
-          if (day === 0 || day === 6) return false;
-        }
+        if (date.getTime() < courant.getTime() && !autoriseJoursPasses) return false;
         return true;
       });
     }
 
     function periodeLabelPourJours(jours) {
       if (!jours || jours.length === 0) return "Période : aucun jour restant";
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      const format = (value) => formatDateMaroc(value, { day: "2-digit", month: "long" });
       const first = semaineDates[jours[0]];
       const last = semaineDates[jours[jours.length - 1]];
       if (!first || !last) return "Période hebdomadaire";
       return `Période : ${format(first)} - ${format(last)}`;
     }
 
-    function calculerJoursAffichesTechnicien(demandes, role, reference = new Date()) {
+    function calculerJoursAffichesTechnicien(demandes, role, reference = maintenantMaroc()) {
       const sentStatuses = ["en_attente", "approuvee", "rejetee"];
       const weekStart = calculerDebutSemaine(reference);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
       weekStart.setHours(0, 0, 0, 0);
       weekEnd.setHours(23, 59, 59, 999);
-      const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
       const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
 
       const demandesEnvoyees = new Set();
@@ -1030,11 +1050,7 @@
         const date = semaineDates[jour];
         if (!date) return false;
         const dateCle = formatDateKey(date);
-        if (date.getTime() <= aujourdHui.getTime() && !autoriseJoursPasses) return false;
-        if (!estRoleShift(role) && !autoriseWeekend) {
-          const day = date.getDay();
-          if (day === 0 || day === 6) return false;
-        }
+        if (date.getTime() < aujourdHui.getTime() && !autoriseJoursPasses) return false;
         if (demandesEnvoyees.has(dateCle)) return false;
         return true;
       });
@@ -1049,7 +1065,7 @@
         .replace(/'/g, "&#39;");
     }
 
-    function initialiserSemaine(joursVisibles = JOURS, reference = new Date()) {
+    function initialiserSemaine(joursVisibles = JOURS, reference = maintenantMaroc()) {
       initialiserSemaineDates();
       joursAffiches = joursVisibles.slice();
       const container = document.getElementById("weekBreakdown");
@@ -1093,8 +1109,8 @@
         tr.dataset.date = date.toISOString().slice(0, 10);
         tr.innerHTML = `
           <td style="padding:8px;"><strong>${LIBELLES_JOURS[jour]}</strong><br/><span style="font-size:12px; color:var(--muted);">${formatDateShort(date)}</span></td>
-          <td style="padding:6px;"><input type="time" id="start_${jour}" disabled/></td>
-          <td style="padding:6px;"><input type="time" id="end_${jour}" disabled/></td>
+          <td style="padding:6px;"><input type="text" id="start_${jour}" lang="fr-MA" inputmode="numeric" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" disabled/></td>
+          <td style="padding:6px;"><input type="text" id="end_${jour}" lang="fr-MA" inputmode="numeric" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" disabled/></td>
           <td style="padding:6px;"><input type="text" id="total_${jour}" readonly style="background:transparent; border:none; color:var(--muted); font-weight:700;" value="0.00" /></td>
           <td style="padding:6px;"><input type="text" id="supp_${jour}" readonly style="background:transparent; border:none; color:var(--muted); font-weight:700;" value="" /></td>
           <td style="padding:6px; min-width:120px;"><div id="suppInfo_${jour}" style="font-size:12px; color:var(--muted); min-height:1.4em;"></div></td>
@@ -1143,8 +1159,8 @@
       }
       const [sh, sm] = start.split(':').map(Number);
       const [eh, em] = end.split(':').map(Number);
-      let debut = new Date(); debut.setHours(sh, sm, 0, 0);
-      let fin = new Date(); fin.setHours(eh, em, 0, 0);
+      let debut = maintenantMaroc(); debut.setHours(sh, sm, 0, 0);
+      let fin = maintenantMaroc(); fin.setHours(eh, em, 0, 0);
       if (fin <= debut) fin.setDate(fin.getDate() + 1);
       const result = calculerMajoration(jour, debut, fin);
       document.getElementById(`total_${jour}`).value = result.total.toFixed(2);
@@ -1187,7 +1203,7 @@
         // Technicien shift : uniquement le jour courant
         if (role === 'technicien_shift') {
           const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
-          const today = new Date();
+          const today = maintenantMaroc();
           today.setHours(0, 0, 0, 0);
           JOURS.forEach((jour) => {
             const date = semaineDates[jour];
@@ -1209,7 +1225,7 @@
         // - superviseur (normal) : lun-ven éditables, week-end grisés sauf si compte autorise_weekend
         if (role === 'technicien') {
           const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
-          const today = new Date();
+          const today = maintenantMaroc();
           today.setHours(0, 0, 0, 0);
           JOURS.forEach((jour) => {
             const date = semaineDates[jour];
@@ -1505,7 +1521,7 @@
       });
       const periodeLabel = document.getElementById('periodeSemaine');
       if (periodeLabel) {
-        periodeLabel.textContent = formatWeekRange(new Date());
+        periodeLabel.textContent = formatWeekRange(maintenantMaroc());
       }
       actualiserTotaux();
       actualiserVisibiliteWeekends();
@@ -1992,7 +2008,7 @@
       start.setDate(date.getDate() + diff);
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      const format = (value) => formatDateMaroc(value, { day: "2-digit", month: "2-digit" });
       return `Semaine du ${format(start)} au ${format(end)}`;
     }
 
@@ -2003,7 +2019,7 @@
       start.setDate(date.getDate() + diff);
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      const format = (value) => formatDateMaroc(value, { day: "2-digit", month: "long" });
       return `Période : ${format(start)} - ${format(end)}`;
     }
 
@@ -2077,7 +2093,7 @@
       }
       if (!demandeEnEditionId) {
         const demandesExistantes = await appelApi("/api/demandes");
-        const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(new Date()));
+        const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(maintenantMaroc()));
         if (demandeDuJour) {
           zoneErreur.textContent = "Une seule demande est autorisée par jour. Modifiez la demande existante.";
           return;
