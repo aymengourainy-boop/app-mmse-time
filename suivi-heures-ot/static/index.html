@@ -1503,6 +1503,12 @@
       return { normals, supps, conges };
     }
 
+    function semaineContientDesDonnees(semaine) {
+      return Object.values(semaine.normals).some((v) => v !== null) ||
+        Object.values(semaine.supps).some((v) => v !== null) ||
+        Object.values(semaine.conges).some((v) => v === true);
+    }
+
     function resetForm() {
       document.getElementById("champOT").value = "";
       document.getElementById("champEquipement").value = "";
@@ -2075,20 +2081,29 @@
     async function creerDemande(soumettre) {
       const zoneErreur = document.getElementById("erreurDemande");
       zoneErreur.textContent = "";
-       
-      // Validation: il faut avoir rempli au moins une période
-      const { normals, supps, conges } = getSemaineValues();
-      const hasAnyDay = Object.values(normals).some(v => v !== null) || 
-                       Object.values(supps).some(v => v !== null) || 
-                       Object.values(conges).some(v => v === true);
+
+      let semaine = getSemaineValues();
+      let hasAnyDay = semaineContientDesDonnees(semaine);
+
+      if (!hasAnyDay && demandeEnEditionId) {
+        const demandes = await appelApi("/api/demandes");
+        const demandeEnCours = demandes.find((d) => d.id === demandeEnEditionId);
+        if (demandeEnCours) {
+          remplirSemaine(demandeEnCours);
+          semaine = getSemaineValues();
+          hasAnyDay = semaineContientDesDonnees(semaine);
+        }
+      }
+
       if (!hasAnyDay) {
         zoneErreur.textContent = "Vous devez remplir au moins un jour de la période hebdomadaire.";
         return;
       }
-       
+
+      const { normals, supps, conges } = semaine;
       const fichiersInput = document.getElementById("champFichiers");
       const fichiers = fichiersInput ? fichiersInput.files : [];
-       
+
       if (!demandeEnEditionId) {
         const demandesExistantes = await appelApi("/api/demandes");
         const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(getMoroccoDate()));
