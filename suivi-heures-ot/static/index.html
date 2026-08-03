@@ -777,24 +777,57 @@
     const LIBELLES_JOURS = { lundi: "Lundi", mardi: "Mardi", mercredi: "Mercredi", jeudi: "Jeudi", vendredi: "Vendredi", samedi: "Samedi", dimanche: "Dimanche" };
 
     const SEUIL_NORMAL_JOUR = 9.0;
+    const MAROC_TIMEZONE = "Africa/Casablanca";
     let semaineDates = {};
     let joursFeriesActifs = [];
     let joursAffiches = JOURS.slice();
-    
+
+    function getMoroccoDateParts(reference = new Date()) {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: MAROC_TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(reference);
+      const values = {};
+      parts.forEach((part) => {
+        if (part.type !== "literal") {
+          values[part.type] = part.value;
+        }
+      });
+      return {
+        year: Number(values.year),
+        month: Number(values.month),
+        day: Number(values.day),
+      };
+    }
+
+    function getMoroccoDate(reference = new Date()) {
+      const { year, month, day } = getMoroccoDateParts(reference);
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    function formatDateWithTimezone(date, options) {
+      return new Intl.DateTimeFormat("fr-FR", {
+        timeZone: MAROC_TIMEZONE,
+        ...options,
+      }).format(date);
+    }
+
     function formatDateShort(date) {
-      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      return formatDateWithTimezone(date, { day: "2-digit", month: "2-digit" });
     }
 
     function formatDateLong(date) {
-      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      return formatDateWithTimezone(date, { day: "2-digit", month: "long" });
     }
 
     function calculerDebutSemaine(reference = new Date()) {
-      const jour = reference.getDay();
+      const courant = getMoroccoDate(reference);
+      const jour = courant.getUTCDay();
       const diff = jour === 0 ? -6 : 1 - jour;
-      const debut = new Date(reference);
-      debut.setDate(reference.getDate() + diff);
-      debut.setHours(0, 0, 0, 0);
+      const debut = new Date(courant);
+      debut.setUTCDate(courant.getUTCDate() + diff);
       return debut;
     }
 
@@ -803,7 +836,7 @@
       semaineDates = {};
       JOURS.forEach((jour, index) => {
         const date = new Date(debut);
-        date.setDate(debut.getDate() + index);
+        date.setUTCDate(debut.getUTCDate() + index);
         semaineDates[jour] = date;
       });
     }
@@ -827,7 +860,9 @@
     }
 
     function formatDateDemande(value) {
-      return new Date(`${value}T00:00:00`).toLocaleDateString("fr-FR", {
+      const date = parseDateInput(value);
+      if (!date) return "";
+      return formatDateWithTimezone(date, {
         weekday: "long",
         day: "2-digit",
         month: "2-digit",
@@ -835,16 +870,19 @@
     }
 
     function formatDateKey(date) {
-      const annee = date.getFullYear();
-      const mois = String(date.getMonth() + 1).padStart(2, "0");
-      const jour = String(date.getDate()).padStart(2, "0");
-      return `${annee}-${mois}-${jour}`;
+      const parts = getMoroccoDateParts(date);
+      return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
     }
 
     function parseDateInput(value) {
       if (!value) return null;
-      const date = new Date(`${value}T00:00:00`);
-      return isNaN(date.getTime()) ? null : date;
+      const parts = value.split("-");
+      if (parts.length !== 3) return null;
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      if (!year || !month || !day) return null;
+      return new Date(Date.UTC(year, month - 1, day));
     }
 
     function getSupervisorFilters() {
@@ -982,8 +1020,7 @@
     }
 
     function obtenirJoursRestants(reference = new Date(), role = "") {
-      const courant = new Date(reference);
-      courant.setHours(0, 0, 0, 0);
+      const courant = getMoroccoDate(reference);
       const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
       const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
       return JOURS.filter((jour) => {
@@ -991,7 +1028,7 @@
         if (!date) return false;
         if (date.getTime() < courant.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
-          const day = date.getDay();
+          const day = date.getUTCDay();
           if (day === 0 || day === 6) return false;
         }
         return true;
@@ -1000,7 +1037,7 @@
 
     function periodeLabelPourJours(jours) {
       if (!jours || jours.length === 0) return "Période : aucun jour restant";
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      const format = (value) => formatDateWithTimezone(value, { day: "2-digit", month: "long" });
       const first = semaineDates[jours[0]];
       const last = semaineDates[jours[jours.length - 1]];
       if (!first || !last) return "Période hebdomadaire";
@@ -1008,25 +1045,15 @@
     }
 
     function calculerJoursAffichesTechnicien(demandes, role, reference = new Date()) {
-      const sentStatuses = ["en_attente", "approuvee", "rejetee"];
       const weekStart = calculerDebutSemaine(reference);
       const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekStart.setHours(0, 0, 0, 0);
-      weekEnd.setHours(23, 59, 59, 999);
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+      weekStart.setUTCHours(0, 0, 0, 0);
+      weekEnd.setUTCHours(23, 59, 59, 999);
       const autoriseWeekend = Boolean(utilisateurCourant?.autorise_weekend);
       const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
 
-      const demandesEnvoyees = new Set();
-      (demandes || []).forEach((demande) => {
-        if (sentStatuses.indexOf(demande.statut) === -1) return;
-        const dateDemande = new Date(`${demande.date_demande}T00:00:00`);
-        if (dateDemande < weekStart || dateDemande > weekEnd) return;
-        demandesEnvoyees.add(formatDateKey(dateDemande));
-      });
-
-      const aujourdHui = new Date(reference);
-      aujourdHui.setHours(0, 0, 0, 0);
+      const aujourdHui = getMoroccoDate(reference);
 
       return JOURS.filter((jour) => {
         const date = semaineDates[jour];
@@ -1034,10 +1061,9 @@
         const dateCle = formatDateKey(date);
         if (date.getTime() < aujourdHui.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
-          const day = date.getDay();
+          const day = date.getUTCDay();
           if (day === 0 || day === 6) return false;
         }
-        if (demandesEnvoyees.has(dateCle)) return false;
         return true;
       });
     }
@@ -1145,9 +1171,9 @@
       }
       const [sh, sm] = start.split(':').map(Number);
       const [eh, em] = end.split(':').map(Number);
-      let debut = new Date(); debut.setHours(sh, sm, 0, 0);
-      let fin = new Date(); fin.setHours(eh, em, 0, 0);
-      if (fin <= debut) fin.setDate(fin.getDate() + 1);
+      let debut = new Date(); debut.setUTCHours(sh, sm, 0, 0);
+      let fin = new Date(); fin.setUTCHours(eh, em, 0, 0);
+      if (fin <= debut) fin.setUTCDate(fin.getUTCDate() + 1);
       const result = calculerMajoration(jour, debut, fin);
       document.getElementById(`total_${jour}`).value = result.total.toFixed(2);
       document.getElementById(`supp_${jour}`).value = result.supp > 0 ? result.supp.toFixed(2) : '';
@@ -1189,8 +1215,7 @@
         // Technicien shift : uniquement le jour courant
         if (role === 'technicien_shift') {
           const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
+          const today = getMoroccoDate();
           JOURS.forEach((jour) => {
             const date = semaineDates[jour];
             const isToday = Boolean(date && date.getTime() === today.getTime());
@@ -1211,8 +1236,7 @@
         // - superviseur (normal) : lun-ven éditables, week-end grisés sauf si compte autorise_weekend
         if (role === 'technicien') {
           const autoriseJoursPasses = Boolean(utilisateurCourant?.autorise_jours_passes);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
+          const today = getMoroccoDate();
           JOURS.forEach((jour) => {
             const date = semaineDates[jour];
             const isHolidayDay = Boolean(date && isJourFerie(date));
@@ -1269,7 +1293,7 @@
     }
 
     function isWeekend(date) {
-      return date.getDay() === 0 || date.getDay() === 6;
+      return date.getUTCDay() === 0 || date.getUTCDay() === 6;
     }
 
     function overlapHours(start, end, periodStart, periodEnd) {
@@ -1291,23 +1315,23 @@
       }
 
       const dayStart = new Date(date);
-      dayStart.setHours(6, 0, 0, 0);
+      dayStart.setUTCHours(6, 0, 0, 0);
       const dayEnd = new Date(date);
-      dayEnd.setHours(21, 0, 0, 0);
+      dayEnd.setUTCHours(21, 0, 0, 0);
       const nightStart1 = new Date(date);
-      nightStart1.setHours(0, 0, 0, 0);
+      nightStart1.setUTCHours(0, 0, 0, 0);
       const nightEnd1 = new Date(date);
-      nightEnd1.setHours(6, 0, 0, 0);
+      nightEnd1.setUTCHours(6, 0, 0, 0);
       const nightStart2 = new Date(date);
-      nightStart2.setHours(21, 0, 0, 0);
+      nightStart2.setUTCHours(21, 0, 0, 0);
       const nightEnd2 = new Date(date);
-      nightEnd2.setHours(24, 0, 0, 0);
+      nightEnd2.setUTCHours(24, 0, 0, 0);
       const nextDayStart = new Date(date);
-      nextDayStart.setDate(date.getDate() + 1);
-      nextDayStart.setHours(0, 0, 0, 0);
+      nextDayStart.setUTCDate(date.getUTCDate() + 1);
+      nextDayStart.setUTCHours(0, 0, 0, 0);
       const nextDayEnd = new Date(date);
-      nextDayEnd.setDate(date.getDate() + 1);
-      nextDayEnd.setHours(6, 0, 0, 0);
+      nextDayEnd.setUTCDate(date.getUTCDate() + 1);
+      nextDayEnd.setUTCHours(6, 0, 0, 0);
 
       const dayHours = overlapHours(start, end, dayStart, dayEnd);
       const nightHours = overlapHours(start, end, nightStart1, nightEnd1)
@@ -1507,7 +1531,7 @@
       });
       const periodeLabel = document.getElementById('periodeSemaine');
       if (periodeLabel) {
-        periodeLabel.textContent = formatWeekRange(new Date());
+        periodeLabel.textContent = formatWeekRange(getMoroccoDate());
       }
       actualiserTotaux();
       actualiserVisibiliteWeekends();
@@ -1613,7 +1637,7 @@
               <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border);">
                 <div>
                   <div style="font-weight:700; color:var(--text);">${jour.nom}</div>
-                  <div class="muted">${formatDateLong(new Date(jour.date))}</div>
+                  <div class="muted">${formatDateLong(parseDateInput(jour.date))}</div>
                 </div>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                   <label style="display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px;">
@@ -1988,25 +2012,28 @@
 
     function formaterPeriode(dateStr) {
       if (!dateStr) return "Semaine";
-      const date = new Date(`${dateStr}T00:00:00`);
-      const day = date.getDay();
+      const date = parseDateInput(dateStr);
+      if (!date) return "Semaine";
+      const day = date.getUTCDay();
       const diff = day === 0 ? -6 : 1 - day;
       const start = new Date(date);
-      start.setDate(date.getDate() + diff);
+      start.setUTCDate(date.getUTCDate() + diff);
       const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      end.setUTCDate(start.getUTCDate() + 6);
+      const format = (value) => formatDateWithTimezone(value, { day: "2-digit", month: "2-digit" });
       return `Semaine du ${format(start)} au ${format(end)}`;
     }
 
     function formatWeekRange(date) {
-      const day = date.getDay();
+      if (!date) return "Période hebdomadaire";
+      const base = getMoroccoDate(date);
+      const day = base.getUTCDay();
       const diff = day === 0 ? -6 : 1 - day;
-      const start = new Date(date);
-      start.setDate(date.getDate() + diff);
+      const start = new Date(base);
+      start.setUTCDate(base.getUTCDate() + diff);
       const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      const format = (value) => value.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+      end.setUTCDate(start.getUTCDate() + 6);
+      const format = (value) => formatDateWithTimezone(value, { day: "2-digit", month: "long" });
       return `Période : ${format(start)} - ${format(end)}`;
     }
 
@@ -2062,13 +2089,9 @@
       const fichiersInput = document.getElementById("champFichiers");
       const fichiers = fichiersInput ? fichiersInput.files : [];
        
-      if (soumettre && !demandeEnEditionId) {
-        zoneErreur.textContent = "Sauvegardez d'abord la demande en brouillon avant de l'envoyer au superviseur.";
-        return;
-      }
       if (!demandeEnEditionId) {
         const demandesExistantes = await appelApi("/api/demandes");
-        const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(new Date()));
+        const demandeDuJour = demandesExistantes.find((d) => d.date_demande === formatDateKey(getMoroccoDate()));
         if (demandeDuJour) {
           zoneErreur.textContent = "Une seule demande est autorisée par jour. Modifiez la demande existante.";
           return;
@@ -2121,6 +2144,8 @@
             verrouillerFormulaire(false);
             document.getElementById("erreurDemande").textContent = "Brouillon sauvegardé.";
           } else {
+            resetForm();
+            demandeEnEditionId = null;
             document.getElementById("erreurDemande").textContent = "Demande envoyée.";
           }
         }

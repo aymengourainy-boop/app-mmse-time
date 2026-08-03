@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: app-mmse-time
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    autoDeploy: true
+    disk:
+      name: app-mmse-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: APP_DATA_DIR
+        value: /var/data

@@ -24,6 +24,7 @@ import base64
 import urllib.parse
 import urllib.request
 from email.message import EmailMessage
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, status, Header, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,6 +42,7 @@ from pathlib import Path
 ensure_schema()
 UPLOADS_DIR = APP_DATA_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+MAROC_TZ = ZoneInfo("Africa/Casablanca")
 
 app = FastAPI(title="Suivi des heures et OT")
 logger = logging.getLogger(__name__)
@@ -87,13 +89,21 @@ def get_utilisateur_courant(
     return utilisateur
 
 
+def maintenant_maroc() -> datetime:
+    return datetime.now(MAROC_TZ)
+
+
+def aujourdhui_maroc() -> date_type:
+    return maintenant_maroc().date()
+
+
 # --------------------------------------------------------------------------- #
 # Calcul automatique des heures (règle simple par défaut : seuil 8h/jour)
 # --------------------------------------------------------------------------- #
 
 def calculer_heures(heure_debut, heure_fin, seuil_normal: Decimal = Decimal("9.00"), est_jour_ferie: bool = False, est_jour_de_repos: bool = False):
-    debut = datetime.combine(date_type.today(), heure_debut)
-    fin = datetime.combine(date_type.today(), heure_fin)
+    debut = datetime.combine(aujourdhui_maroc(), heure_debut)
+    fin = datetime.combine(aujourdhui_maroc(), heure_fin)
     if fin < debut:
         fin += timedelta(days=1)  # gère les shifts de nuit qui passent minuit
     total_heures = Decimal(str(round((fin - debut).total_seconds() / 3600, 2)))
@@ -138,14 +148,14 @@ def payload_contient_jours_passes(
         if not jour_a_du_contenu(normales_par_jour, supplementaires_par_jour, conges_par_jour, cle):
             continue
         date_jour = date_depuis_cle(cle, reference)
-        if date_jour and date_jour < date_type.today():
+        if date_jour and date_jour < aujourdhui_maroc():
             return True
     return False
 
 
 def verifier_date_demande_technicien_shift(date_demande: date_type, utilisateur: models.Utilisateur):
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if date_demande != date_type.today():
+        if date_demande != aujourdhui_maroc():
             raise HTTPException(
                 status_code=400,
                 detail="Un technicien shift ne peut saisir que la date du jour",
@@ -154,7 +164,7 @@ def verifier_date_demande_technicien_shift(date_demande: date_type, utilisateur:
 
 def verifier_demande_modifiable(demande: models.Demande, utilisateur: models.Utilisateur):
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if demande.date_demande < date_type.today() and not demande.autorise_modification_retro:
+        if demande.date_demande < aujourdhui_maroc() and not demande.autorise_modification_retro:
             raise HTTPException(
                 status_code=403,
                 detail="Cette demande ne peut plus être modifiée après la fin de la journée",
@@ -352,7 +362,7 @@ def date_depuis_cle(cle: str, reference: date_type | None = None) -> date_type |
     except ValueError:
         pass
     if reference is None:
-        reference = date_type.today()
+        reference = aujourdhui_maroc()
     jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
     cle_norm = cle.lower().strip()
     if cle_norm in jours_fr:
@@ -715,17 +725,12 @@ async def creer_demande(
     }
     if utilisateur.role not in allowed_roles:
         raise HTTPException(status_code=403, detail="Accès refusé : rôle non autorisé à créer une demande")
-    if soumettre:
-        raise HTTPException(
-            status_code=400,
-            detail="Sauvegardez d'abord la demande en brouillon avant de l'envoyer au superviseur",
-        )
 
     # Pour les techniciens (non-supervisors) on exige qu'un superviseur soit associé
     if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT} and not utilisateur.superviseur_id:
         raise HTTPException(status_code=400, detail="Aucun superviseur n'est associé à ce technicien")
 
-    date_demande = date_type.today()
+    date_demande = aujourdhui_maroc()
     if date_demande_str:
         try:
             date_demande = date_type.fromisoformat(date_demande_str)
@@ -770,12 +775,12 @@ async def creer_demande(
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
-            if date_demande != date_type.today():
+            if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens Shift ne peuvent saisir que la date du jour")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
         if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
-            if date_demande != date_type.today():
+            if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
             if est_weekend(date_demande) and not peut_saisir_weekend(utilisateur):
                 raise HTTPException(status_code=403, detail="Saisie le week-end non autorisée pour votre rôle")
@@ -793,7 +798,7 @@ async def creer_demande(
     justification_stockee = justification_ot if justification_ot else None
 
     demande = models.Demande(
-        reference=f"DEM-{datetime.now():%Y%m%d%H%M%S}-{utilisateur.id}",
+        reference=f"DEM-{maintenant_maroc():%Y%m%d%H%M%S}-{utilisateur.id}",
         technicien_id=utilisateur.id,
         superviseur_id=utilisateur.superviseur_id,
         departement_id=utilisateur.departement_id,
@@ -815,7 +820,7 @@ async def creer_demande(
         justification_ot=justification_stockee,
         commentaires=commentaires,
         statut=models.StatutDemande.EN_ATTENTE if soumettre else models.StatutDemande.BROUILLON,
-        envoyee_le=datetime.utcnow() if soumettre else None,
+        envoyee_le=maintenant_maroc() if soumettre else None,
     )
     db.add(demande)
     db.commit()
@@ -825,7 +830,7 @@ async def creer_demande(
         uploads_dir = UPLOADS_DIR
         for fichier in fichiers:
             original_name = os.path.basename(fichier.filename)
-            safe_name = f"{datetime.utcnow():%Y%m%d%H%M%S}_{original_name}"
+            safe_name = f"{maintenant_maroc():%Y%m%d%H%M%S}_{original_name}"
             chemin_stockage = f"uploads/{safe_name}"
             destination = uploads_dir / safe_name
             contenu = await fichier.read()
@@ -877,7 +882,7 @@ async def ajouter_pieces_jointes(
     uploads_dir = UPLOADS_DIR
     for fichier in fichiers:
         original_name = os.path.basename(fichier.filename)
-        safe_name = f"{datetime.utcnow():%Y%m%d%H%M%S}_{original_name}"
+        safe_name = f"{maintenant_maroc():%Y%m%d%H%M%S}_{original_name}"
         chemin_stockage = f"uploads/{safe_name}"
         destination = uploads_dir / safe_name
         contenu = await fichier.read()
@@ -1087,12 +1092,12 @@ def modifier_demande(
             raise HTTPException(status_code=403, detail="La modification des jours passés nécessite l'autorisation d'un administrateur")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if demande.date_demande < date_type.today() and not demande.autorise_modification_retro:
+        if demande.date_demande < aujourdhui_maroc() and not demande.autorise_modification_retro:
             raise HTTPException(status_code=403, detail="Modification d'une journée passée non autorisée. Contactez un administrateur.")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
         if jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, jour_courant):
-            if demande.date_demande != date_type.today():
+            if demande.date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
             if est_weekend(demande.date_demande) and not utilisateur.autorise_weekend:
                 raise HTTPException(status_code=403, detail="Saisie le week-end non autorisée pour votre rôle")
@@ -1138,7 +1143,7 @@ def modifier_demande(
         demande.statut = models.StatutDemande.RETOUR_MODIFICATION
     else:
         demande.statut = models.StatutDemande.BROUILLON
-    demande.envoyee_le = datetime.utcnow() if donnees.soumettre else None
+    demande.envoyee_le = maintenant_maroc() if donnees.soumettre else None
     demande.traitee_le = None
 
     db.add(models.HistoriqueDemande(
@@ -1200,7 +1205,7 @@ def valider_demande(
         demande.heures_supplementaires = requete.heures_supplementaires_modifiees
 
     demande.statut = nouveau_statut
-    demande.traitee_le = datetime.utcnow()
+    demande.traitee_le = maintenant_maroc()
 
     db.add(models.Validation(
         demande_id=demande.id,
