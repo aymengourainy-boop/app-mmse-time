@@ -655,6 +655,7 @@
       <div id="vueTechnicien" class="hidden">
         <div class="card">
           <h2 id="titreFormulaire">Nouvelle demande</h2>
+          <div id="blocInfosTechnicien" class="hidden">
           <div class="grid-2">
             <div>
               <label>Ordre de travail SAP</label>
@@ -680,6 +681,7 @@
 
           <label>Motif / raison des heures supplémentaires<span class="required-star">*</span></label>
           <textarea id="champJustificationOT" placeholder="Expliquez la raison des heures supplémentaires (ex. intervention urgente, charge de travail, etc.)"></textarea>
+          </div>
   
           <div class="card" id="periodeHebdoWrapper" style="padding: 16px; margin-top: 16px;">
             <h2>Période hebdomadaire<span class="required-star">*</span></h2>
@@ -987,7 +989,7 @@
       return JOURS.filter((jour) => {
         const date = semaineDates[jour];
         if (!date) return false;
-        if (date.getTime() <= courant.getTime() && !autoriseJoursPasses) return false;
+        if (date.getTime() < courant.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
           const day = date.getDay();
           if (day === 0 || day === 6) return false;
@@ -1030,7 +1032,7 @@
         const date = semaineDates[jour];
         if (!date) return false;
         const dateCle = formatDateKey(date);
-        if (date.getTime() <= aujourdHui.getTime() && !autoriseJoursPasses) return false;
+        if (date.getTime() < aujourdHui.getTime() && !autoriseJoursPasses) return false;
         if (!estRoleShift(role) && !autoriseWeekend) {
           const day = date.getDay();
           if (day === 0 || day === 6) return false;
@@ -1050,7 +1052,7 @@
     }
 
     function initialiserSemaine(joursVisibles = JOURS, reference = new Date()) {
-      initialiserSemaineDates();
+      initialiserSemaineDates(reference);
       joursAffiches = joursVisibles.slice();
       const container = document.getElementById("weekBreakdown");
       container.innerHTML = "";
@@ -1090,7 +1092,7 @@
       joursAffiches.forEach((jour) => {
         const date = semaineDates[jour];
         const tr = document.createElement('tr');
-        tr.dataset.date = date.toISOString().slice(0, 10);
+        tr.dataset.date = formatDateKey(date);
         tr.innerHTML = `
           <td style="padding:8px;"><strong>${LIBELLES_JOURS[jour]}</strong><br/><span style="font-size:12px; color:var(--muted);">${formatDateShort(date)}</span></td>
           <td style="padding:6px;"><input type="time" id="start_${jour}" disabled/></td>
@@ -1249,7 +1251,7 @@
 
 
     function isJourFerie(date) {
-      const cle = date.toISOString().slice(0, 10);
+      const cle = formatDateKey(date);
       return joursFeriesActifs.some((jour) => jour.date === cle);
     }
 
@@ -1521,7 +1523,8 @@
       document.getElementById("champFichiers").value = "";
       const periodeLabel = document.getElementById('periodeSemaine');
       if (periodeLabel) {
-        periodeLabel.textContent = formatWeekRange(new Date(demande.date_demande));
+        const dateRef = parseDateInput(demande.date_demande) || new Date();
+        periodeLabel.textContent = formatWeekRange(dateRef);
       }
       remplirSemaine(demande);
       document.getElementById("titreFormulaire").textContent = demande.statut === "retour_modification" ? `Demande à corriger #${demande.id}` : `Modifier la demande #${demande.id}`;
@@ -2056,20 +2059,8 @@
         return;
       }
        
-      // Validation: si heures supplémentaires, justification est obligatoire
-      const totalSupp = Object.values(supps).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
-      const justification = document.getElementById("champJustificationOT").value.trim();
-      if (totalSupp > 0 && !justification) {
-        zoneErreur.textContent = "Vous devez justifier les heures supplémentaires avant de sauvegarder.";
-        return;
-      }
-       
-      // Validation: pièces jointes sont obligatoires
-      const fichiers = document.getElementById("champFichiers").files;
-      if (fichiers.length === 0) {
-        zoneErreur.textContent = "Vous devez ajouter au moins une pièce jointe avant de sauvegarder.";
-        return;
-      }
+      const fichiersInput = document.getElementById("champFichiers");
+      const fichiers = fichiersInput ? fichiersInput.files : [];
        
       if (soumettre && !demandeEnEditionId) {
         zoneErreur.textContent = "Sauvegardez d'abord la demande en brouillon avant de l'envoyer au superviseur.";
