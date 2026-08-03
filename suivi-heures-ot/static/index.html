@@ -810,6 +810,7 @@
     function formatDateWithTimezone(date, options) {
       return new Intl.DateTimeFormat("fr-FR", {
         timeZone: MAROC_TIMEZONE,
+        hour12: false,
         ...options,
       }).format(date);
     }
