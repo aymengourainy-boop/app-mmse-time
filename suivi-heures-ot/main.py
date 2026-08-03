@@ -1243,6 +1243,8 @@ def modifier_demande(
     demande.heures_normales_par_jour = heures_normales_dict
     demande.heures_supplementaires_par_jour = heures_supplementaires_dict
     demande.conges_par_jour = normaliser_conges_par_jour(donnees.conges_par_jour)
+    if donnees.localisation is not None:
+        demande.localisation = donnees.localisation
     demande.equipement = donnees.equipement
     demande.ordre_travail_sap = donnees.ordre_travail_sap
     demande.type_intervention = donnees.type_intervention
@@ -1547,7 +1549,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     reload_mode = os.environ.get("RELOAD", "0") == "1" and not os.environ.get("WEBSITE_SITE_NAME")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
-
 
 
 

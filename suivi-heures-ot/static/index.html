@@ -21,6 +21,55 @@
       --shadow: 0 10px 40px rgba(30, 64, 175, 0.15);
       font-family: "Poppins", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
+
+    async function obtenirLocalisationIp() {
+      try {
+        const geoResponse = await fetch("https://ipapi.co/json/");
+        if (!geoResponse.ok) return null;
+        const geoData = await geoResponse.json();
+        return {
+          source: "ip",
+          ville: geoData.city || "",
+          pays: geoData.country_name || "",
+          ip: geoData.ip || ""
+        };
+      } catch (e) {
+        console.warn("Localisation IP non disponible", e);
+        return null;
+      }
+    }
+
+    function obtenirLocalisationGps() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              source: "gps",
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy_m: position.coords.accuracy,
+            });
+          },
+          (error) => {
+            console.warn("Localisation GPS non disponible", error);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+    }
+
+    async function obtenirLocalisationPourDemande() {
+      const localisationGps = await obtenirLocalisationGps();
+      if (localisationGps) {
+        return localisationGps;
+      }
+      return obtenirLocalisationIp();
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -925,8 +974,7 @@
       const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
       const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
       const meta = STATUS_META[d.statut] || STATUS_META.en_attente;
-      const localisation = d.localisation || {};
-      const lieuTexte = localisation.ville ? `📍 ${escapeHtml(localisation.ville)}, ${escapeHtml(localisation.pays || "")}`.trim() : "📍 Localisation inconnue";
+      const lieuTexte = formaterLocalisation(d.localisation || {});
 
       if (d.statut === "brouillon") {
         return `
@@ -2148,6 +2196,35 @@
       return `<span class="pill ${cls}">${LIBELLES_STATUT[statut] || statut}</span>`;
     }
 
+    function formaterLocalisation(localisation) {
+      if (!localisation) return "📍 Localisation inconnue";
+      const latitude = localisation.latitude ?? localisation.lat;
+      const longitude = localisation.longitude ?? localisation.lng;
+      const accuracy = localisation.accuracy_m ?? localisation.accuracy;
+      const ville = localisation.ville || localisation.city || "";
+      const pays = localisation.pays || localisation.country || "";
+
+      if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
+        const coords = `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`;
+        const details = [];
+        const lieu = [ville, pays].filter(Boolean).join(", ");
+        if (lieu) details.push(escapeHtml(lieu));
+        if (accuracy !== undefined && accuracy !== null && accuracy !== "") {
+          const precision = Number(accuracy);
+          if (!Number.isNaN(precision)) {
+            details.push(`±${Math.round(precision)}m`);
+          }
+        }
+        return `📍 GPS ${escapeHtml(coords)}${details.length ? ` (${details.join(" · ")})` : ""}`;
+      }
+
+      if (ville || pays) {
+        return `📍 ${escapeHtml([ville, pays].filter(Boolean).join(", "))}`;
+      }
+
+      return "📍 Localisation inconnue";
+    }
+
     function formaterPeriode(dateStr) {
       if (!dateStr) return "Semaine";
       const date = parseDateInput(dateStr);
@@ -2256,19 +2333,9 @@
       formData.append("conges_par_jour", JSON.stringify(conges));
       formData.append("soumettre", soumettre ? "true" : "false");
       
-      // Ajouter la localisation du client
-      try {
-        const geoResponse = await fetch("https://ipapi.co/json/");
-        if (geoResponse.ok) {
-          const geoData = await geoResponse.json();
-          formData.append("localisation_json", JSON.stringify({
-            ville: geoData.city || "",
-            pays: geoData.country_name || "",
-            ip: geoData.ip || ""
-          }));
-        }
-      } catch (e) {
-        console.warn("Localisation non disponible", e);
+      const localisation = await obtenirLocalisationPourDemande();
+      if (localisation) {
+        formData.append("localisation_json", JSON.stringify(localisation));
       }
       
       for (let i = 0; i < fichiers.length; i++) {
@@ -2286,6 +2353,7 @@
             heures_normales_par_jour: normals,
             heures_supplementaires_par_jour: supps,
             conges_par_jour: conges,
+            localisation,
             soumettre,
           }) });
           if (soumettre) {
