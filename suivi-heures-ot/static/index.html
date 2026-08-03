@@ -2229,8 +2229,9 @@
     }
 
     function badgeStatut(statut) {
-      const cls = `pill-${statut}`;
-      return `<span class="pill ${cls}">${LIBELLES_STATUT[statut] || statut}</span>`;
+      const statutNormalise = (statut || "").toString().toLowerCase();
+      const cls = `pill-${statutNormalise}`;
+      return `<span class="pill ${cls}">${LIBELLES_STATUT[statutNormalise] || statutNormalise}</span>`;
     }
 
     function formaterPeriode(dateStr) {
@@ -2258,6 +2259,14 @@
       end.setUTCDate(start.getUTCDate() + 6);
       const format = (value) => formatDateWithTimezone(value, { day: "2-digit", month: "long" });
       return `Période : ${format(start)} - ${format(end)}`;
+    }
+
+    function normaliserDemandeRecue(demande) {
+      if (!demande) return demande;
+      return {
+        ...demande,
+        statut: (demande.statut || "").toString().toLowerCase(),
+      };
     }
 
     function renderBreakdown(demande) {
@@ -2397,7 +2406,7 @@
     async function chargerDemandesTechnicien() {
       const conteneur = document.getElementById("listeDemandesTechnicien");
       try {
-        const demandes = await appelApi("/api/demandes");
+        const demandes = (await appelApi("/api/demandes")).map(normaliserDemandeRecue);
         initialiserSemaine(calculerJoursAffichesTechnicien(demandes, utilisateurCourant ? utilisateurCourant.role : ""));
         await chargerShiftDuJour();  // Charger les info du shift
         const soumises = demandes.filter((d) => d.statut !== "brouillon");
@@ -2534,7 +2543,7 @@
 
     async function editerDemande(id) {
       try {
-        const demandes = await appelApi("/api/demandes");
+        const demandes = (await appelApi("/api/demandes")).map(normaliserDemandeRecue);
         const demande = demandes.find((item) => item.id === id);
         if (!demande) throw new Error("Demande introuvable");
         setFormForDemande(demande);
@@ -2559,7 +2568,7 @@
       try {
         const isAdmin = utilisateurCourant && utilisateurCourant.role === 'administrateur';
         const url = "/api/demandes" + (isAdmin && adminViewingArchived ? "?archived=true" : "");
-        const demandes = await appelApi(url);
+        const demandes = (await appelApi(url)).map(normaliserDemandeRecue);
         const filtres = getSupervisorFilters();
         const demandesFiltrees = demandes.filter((demande) => filtreDemandeSuperviseur(demande, filtres));
         document.getElementById("statAttente").textContent = demandesFiltrees.filter((d) => d.statut === "en_attente").length;
