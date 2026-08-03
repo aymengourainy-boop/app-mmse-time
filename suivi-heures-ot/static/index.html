@@ -686,6 +686,13 @@
           <div class="card" id="periodeHebdoWrapper" style="padding: 16px; margin-top: 16px;">
             <h2>Période hebdomadaire<span class="required-star">*</span></h2>
             <div id="periodeSemaine" class="muted" style="margin-top: 8px;">Chargement de la période...</div>
+            
+            <!-- Affichage du shift pour techniciens SHIFT -->
+            <div id="shiftInfoContainer" class="hidden" style="margin-top: 12px; padding: 12px; background: rgba(30, 64, 175, 0.08); border: 1px solid var(--accent); border-radius: 10px;">
+              <div style="font-size: 14px; color: var(--accent); font-weight: 600;">📅 Shift du jour</div>
+              <div id="shiftInfoText" style="font-size: 13px; color: var(--muted); margin-top: 6px;"></div>
+            </div>
+            
             <div id="weekBreakdown"></div>
             <div class="totals">
               <div><b id="totalNormal">0.00</b> h normales</div>
@@ -1278,6 +1285,107 @@
       }
     }
 
+    async function chargerShiftDuJour() {
+      try {
+        const container = document.getElementById("shiftInfoContainer");
+        const textEl = document.getElementById("shiftInfoText");
+        if (!container || !utilisateurCourant) return;
+
+        // Only show for SHIFT technicians
+        if (utilisateurCourant.role !== "technicien_shift") {
+          container.classList.add("hidden");
+          return;
+        }
+
+        const response = await appelApi(`/api/planning-shift/${utilisateurCourant.id}/current-shift`);
+        if (!response) {
+          textEl.textContent = "Aucun shift assigné pour aujourd'hui.";
+          container.classList.remove("hidden");
+          return;
+        }
+
+        // Format shift info
+        const shiftNames = {
+          "matin": "🌅 Matin (6h-14h)",
+          "apres_midi": "☀️ Après-midi (14h-22h)",
+          "nuit": "🌙 Nuit (22h-6h)"
+        };
+
+        const shiftLabel = shiftNames[response.type_shift] || response.type_shift;
+        textEl.textContent = shiftLabel;
+        
+        // Store current shift for calculations
+        window.currentShift = response;
+        
+        container.classList.remove("hidden");
+      } catch (e) {
+        console.warn("Erreur lors du chargement du shift:", e);
+      }
+    }
+
+    function calculerHeuresShift(heure_debut, heure_fin, typeShift) {
+      /**
+       * Calcule les heures normales vs supplémentaires pour un technicien SHIFT
+       * Shifts: matin (6-14), apres_midi (14-22), nuit (22-6)
+       */
+      const [sh, sm] = heure_debut.split(':').map(Number);
+      const [eh, em] = heure_fin.split(':').map(Number);
+      
+      let debut = new Date(); debut.setUTCHours(sh, sm, 0, 0);
+      let fin = new Date(); fin.setUTCHours(eh, em, 0, 0);
+      if (fin <= debut) fin.setUTCDate(fin.getUTCDate() + 1);
+      
+      const totalHeures = (fin - debut) / 3600000; // Convert ms to hours
+      
+      // Limites du shift
+      const shiftLimites = {
+        "matin": { debut: 6, fin: 14 },
+        "apres_midi": { debut: 14, fin: 22 },
+        "nuit": { debut: 22, fin: 6 }
+      };
+      
+      if (!shiftLimites[typeShift]) {
+        // Si type shift inconnu, appliquer logique normale (8h max)
+        const normales = Math.min(totalHeures, 8);
+        return { total: totalHeures, normales, supp: Math.max(0, totalHeures - 8) };
+      }
+      
+      const limits = shiftLimites[typeShift];
+      let heuresNormales = 0;
+      
+      if (typeShift === "nuit") {
+        // Cas spécial pour nuit (22-6, passe minuit)
+        if (sh >= 22) {
+          // Entre 22h et minuit
+          const minutesUntilMidnight = (24 - sh) * 60 + (60 - sm);
+          heuresNormales += minutesUntilMidnight / 60;
+        }
+        if (eh < 6 && sh < 22) {
+          // Entre minuit et 6h
+          heuresNormales += eh + em / 60;
+        } else if (eh >= 6 && sh >= 22) {
+          // Complètement après 22h
+          heuresNormales = 8;
+        }
+      } else {
+        // Cas normal: matin (6-14) ou apres_midi (14-22)
+        if (sh >= limits.debut && sh < limits.fin) {
+          heuresNormales += Math.min(eh + em/60, limits.fin) - sh - sm/60;
+        } else if (sh < limits.debut && eh > limits.debut) {
+          heuresNormales = Math.min(eh + em/60, limits.fin) - limits.debut;
+        }
+      }
+      
+      heuresNormales = Math.min(heuresNormales, 8);
+      const heuresSupp = Math.max(0, totalHeures - heuresNormales);
+      
+      return {
+        total: totalHeures,
+        normales: heuresNormales,
+        supp: heuresSupp
+      };
+    }
+
 
 
     function isJourFerie(date) {
@@ -1316,6 +1424,24 @@
       if (totalHours <= 0) {
         return { total: 0, normale: 0, supp: 0, info: "" };
       }
+
+      // Pour techniciens SHIFT : utiliser le calcul de shift
+      const role = utilisateurCourant ? utilisateurCourant.role : "";
+      if (role === "technicien_shift" && window.currentShift) {
+        if (isFerie || isRepos) {
+          return { total: totalHours, normale: 0, supp: totalHours, info: `${totalHours.toFixed(2)}h à 100%` };
+        }
+
+        const sh = start.getUTCHours() + start.getUTCMinutes() / 60;
+        const eh = end.getUTCHours() + end.getUTCMinutes() / 60;
+        const startStr = `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
+        const endStr = `${String(end.getUTCHours()).padStart(2, '0')}:${String(end.getUTCMinutes()).padStart(2, '0')}`;
+        
+        const shiftResult = calculerHeuresShift(startStr, endStr, window.currentShift.type_shift);
+        const info = shiftResult.supp > 0 ? `${shiftResult.supp.toFixed(2)}h supplémentaires` : "Heures normales";
+        return { total: shiftResult.total, normale: shiftResult.normales, supp: shiftResult.supp, info };
+      }
+
       if (isFerie || isRepos) {
         return { total: totalHours, normale: 0, supp: totalHours, info: `${totalHours.toFixed(2)}h à 100%` };
       }
@@ -2197,6 +2323,7 @@
       try {
         const demandes = await appelApi("/api/demandes");
         initialiserSemaine(calculerJoursAffichesTechnicien(demandes, utilisateurCourant ? utilisateurCourant.role : ""));
+        await chargerShiftDuJour();  // Charger les info du shift
         const soumises = demandes.filter((d) => d.statut !== "brouillon");
         const totalHeures = soumises.reduce((acc, d) => acc + Number(d.heures_travaillees || 0), 0);
         const totalSupp = soumises.reduce((acc, d) => acc + Number(d.heures_supplementaires || 0), 0);

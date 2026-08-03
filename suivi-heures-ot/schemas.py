@@ -129,3 +129,27 @@ class DemandeReponse(BaseModel):
     statut: str
     cree_le: datetime
     regle_ot_appliquee_id: int | None
+
+
+# --------------------------------------------------------------------------- #
+# Planning Shift (pour techniciens SHIFT)
+# --------------------------------------------------------------------------- #
+
+class PlanningShiftCreation(BaseModel):
+    utilisateur_id: int
+    date: date
+    type_shift: str  # "matin", "apres_midi", "nuit"
+    heure_debut: time | None = None
+    heure_fin: time | None = None
+
+
+class PlanningShiftReponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    utilisateur_id: int
+    date: date
+    type_shift: str
+    heure_debut: time | None
+    heure_fin: time | None
+    cree_le: datetime

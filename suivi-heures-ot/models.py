@@ -172,6 +172,25 @@ class Equipe(Base, TimestampMixin):
     membres: Mapped[list["Utilisateur"]] = relationship(back_populates="equipe")
 
 
+class PlanningShift(Base, TimestampMixin):
+    """Planning des shifts pour les techniciens SHIFT - quel shift par jour"""
+    __tablename__ = "plannings_shift"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    utilisateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateurs.id"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    type_shift: Mapped[str] = mapped_column(String(50), nullable=False)  # "matin" (6-14), "apres_midi" (14-22), "nuit" (22-6)
+    heure_debut: Mapped[time] = mapped_column(Time, nullable=False)  # ex: 06:00:00
+    heure_fin: Mapped[time] = mapped_column(Time, nullable=False)  # ex: 14:00:00
+
+    utilisateur: Mapped["Utilisateur"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("utilisateur_id", "date", name="uq_planning_shift_par_jour"),
+        Index("ix_planning_shift_utilisateur_date", "utilisateur_id", "date"),
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Utilisateurs
 # --------------------------------------------------------------------------- #
