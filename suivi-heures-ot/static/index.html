@@ -22,54 +22,6 @@
       font-family: "Poppins", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    async function obtenirLocalisationIp() {
-      try {
-        const geoResponse = await fetch("https://ipapi.co/json/");
-        if (!geoResponse.ok) return null;
-        const geoData = await geoResponse.json();
-        return {
-          source: "ip",
-          ville: geoData.city || "",
-          pays: geoData.country_name || "",
-          ip: geoData.ip || ""
-        };
-      } catch (e) {
-        console.warn("Localisation IP non disponible", e);
-        return null;
-      }
-    }
-
-    function obtenirLocalisationGps() {
-      return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          resolve(null);
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({
-              source: "gps",
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy_m: position.coords.accuracy,
-            });
-          },
-          (error) => {
-            console.warn("Localisation GPS non disponible", error);
-            resolve(null);
-          },
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      });
-    }
-
-    async function obtenirLocalisationPourDemande() {
-      const localisationGps = await obtenirLocalisationGps();
-      if (localisationGps) {
-        return localisationGps;
-      }
-      return obtenirLocalisationIp();
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -959,6 +911,91 @@
       rejetee: { label: "Rejetées", tone: "rejetee", className: "section-rejetee", cardClass: "rejetee" },
       brouillon: { label: "Brouillons", tone: "brouillon", className: "section-brouillon", cardClass: "brouillon" },
     };
+
+    async function obtenirLocalisationIp() {
+      try {
+        const geoResponse = await fetch("https://ipapi.co/json/");
+        if (!geoResponse.ok) return null;
+        const geoData = await geoResponse.json();
+        return {
+          source: "ip",
+          ville: geoData.city || "",
+          pays: geoData.country_name || "",
+          ip: geoData.ip || ""
+        };
+      } catch (e) {
+        console.warn("Localisation IP non disponible", e);
+        return null;
+      }
+    }
+
+    function obtenirLocalisationGps() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              source: "gps",
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy_m: position.coords.accuracy,
+            });
+          },
+          (error) => {
+            console.warn("Localisation GPS non disponible", error);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+    }
+
+    async function obtenirLocalisationPourDemande() {
+      const localisationGps = await obtenirLocalisationGps();
+      if (localisationGps) {
+        return localisationGps;
+      }
+      return obtenirLocalisationIp();
+    }
+
+    function formaterLocalisation(localisation) {
+      if (!localisation) return "📍 Localisation inconnue";
+      if (typeof localisation === "string") {
+        try {
+          localisation = JSON.parse(localisation);
+        } catch (e) {
+          return "📍 Localisation inconnue";
+        }
+      }
+      const latitude = localisation.latitude ?? localisation.lat;
+      const longitude = localisation.longitude ?? localisation.lng;
+      const accuracy = localisation.accuracy_m ?? localisation.accuracy;
+      const ville = localisation.ville || localisation.city || "";
+      const pays = localisation.pays || localisation.country || "";
+
+      if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
+        const coords = `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`;
+        const details = [];
+        const lieu = [ville, pays].filter(Boolean).join(", ");
+        if (lieu) details.push(escapeHtml(lieu));
+        if (accuracy !== undefined && accuracy !== null && accuracy !== "") {
+          const precision = Number(accuracy);
+          if (!Number.isNaN(precision)) {
+            details.push(`±${Math.round(precision)}m`);
+          }
+        }
+        return `📍 GPS ${escapeHtml(coords)}${details.length ? ` (${details.join(" · ")})` : ""}`;
+      }
+
+      if (ville || pays) {
+        return `📍 ${escapeHtml([ville, pays].filter(Boolean).join(", "))}`;
+      }
+
+      return "📍 Localisation inconnue";
+    }
 
     function filtreDemandeSuperviseur(demande, filtres) {
       if (filtres.statut !== "all" && demande.statut !== filtres.statut) return false;
@@ -2194,35 +2231,6 @@
     function badgeStatut(statut) {
       const cls = `pill-${statut}`;
       return `<span class="pill ${cls}">${LIBELLES_STATUT[statut] || statut}</span>`;
-    }
-
-    function formaterLocalisation(localisation) {
-      if (!localisation) return "📍 Localisation inconnue";
-      const latitude = localisation.latitude ?? localisation.lat;
-      const longitude = localisation.longitude ?? localisation.lng;
-      const accuracy = localisation.accuracy_m ?? localisation.accuracy;
-      const ville = localisation.ville || localisation.city || "";
-      const pays = localisation.pays || localisation.country || "";
-
-      if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
-        const coords = `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`;
-        const details = [];
-        const lieu = [ville, pays].filter(Boolean).join(", ");
-        if (lieu) details.push(escapeHtml(lieu));
-        if (accuracy !== undefined && accuracy !== null && accuracy !== "") {
-          const precision = Number(accuracy);
-          if (!Number.isNaN(precision)) {
-            details.push(`±${Math.round(precision)}m`);
-          }
-        }
-        return `📍 GPS ${escapeHtml(coords)}${details.length ? ` (${details.join(" · ")})` : ""}`;
-      }
-
-      if (ville || pays) {
-        return `📍 ${escapeHtml([ville, pays].filter(Boolean).join(", "))}`;
-      }
-
-      return "📍 Localisation inconnue";
     }
 
     function formaterPeriode(dateStr) {
