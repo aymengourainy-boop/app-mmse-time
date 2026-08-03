@@ -94,7 +94,7 @@ def geolocaliser_ip(ip: str) -> dict[str, str] | None:
 # Authentification : rÃ©cupÃ©rer l'utilisateur courant Ã  partir du token JWT
 # --------------------------------------------------------------------------- #
 
-def get_utilisateur_courant(
+def get_utilisateur(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> models.Utilisateur:
@@ -216,7 +216,7 @@ def est_weekend(date_demande: date_type) -> bool:
 
 
 def peut_saisir_weekend(utilisateur: models.Utilisateur) -> bool:
-    return utilisateur_courant.role in {
+    return utilisateur.role in {
         models.RoleUtilisateur.TECHNICIEN_SHIFT,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
         models.RoleUtilisateur.ADMINISTRATEUR,
@@ -251,7 +251,7 @@ def payload_contient_jours_passes(
 
 
 def verifier_date_demande_technicien_shift(date_demande: date_type, utilisateur: models.Utilisateur):
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if date_demande != aujourdhui_maroc():
             raise HTTPException(
                 status_code=400,
@@ -260,7 +260,7 @@ def verifier_date_demande_technicien_shift(date_demande: date_type, utilisateur:
 
 
 def verifier_demande_modifiable(demande: models.Demande, utilisateur: models.Utilisateur):
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if demande.date_demande < aujourdhui_maroc() and not demande.autorise_modification_retro:
             raise HTTPException(
                 status_code=403,
@@ -318,7 +318,7 @@ def creer_notification(db: Session, utilisateur_id: int, demande_id: int | None,
 def notifier_utilisateur(db: Session, utilisateur: models.Utilisateur | None, demande_id: int | None, type_notification: models.TypeNotification, message: str):
     if not utilisateur:
         return
-    creer_notification(db, utilisateur_courant.id, demande_id, type_notification, message)
+    creer_notification(db, utilisateur.id, demande_id, type_notification, message)
     numero = nettoyer_telephone(utilisateur.numero_telephone)
     if numero:
         envoyer_sms(numero, message)
@@ -530,7 +530,7 @@ def calculer_heures_depuis_breakdown(
         jour_ferie = trouver_jour_ferie(db, date_jour)
         date_repos = est_weekend(date_jour)
         if jour_ferie:
-            if utilisateur_courant.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR} and not jour_ferie.comptabilise_pour_techniciens_normaux:
+            if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR} and not jour_ferie.comptabilise_pour_techniciens_normaux:
                 continue
             week_totals.append((date_jour, Decimal("0.00"), total))
         elif date_repos:
@@ -575,13 +575,13 @@ def login(requete: schemas.LoginRequete, db: Session = Depends(get_db)):
     if not utilisateur.actif:
         raise HTTPException(status_code=403, detail="Compte dÃ©sactivÃ©")
 
-    token = creer_token({"sub": str(utilisateur_courant.id), "role": utilisateur_courant.role.value})
+    token = creer_token({"sub": str(utilisateur.id), "role": utilisateur.role.value})
     return schemas.TokenReponse(
         access_token=token,
-        role=utilisateur_courant.role.value,
+        role=utilisateur.role.value,
         nom=utilisateur.nom,
         prenom=utilisateur.prenom,
-        utilisateur_id=utilisateur_courant.id,
+        utilisateur_id=utilisateur.id,
         autorise_weekend=bool(utilisateur.autorise_weekend),
         autorise_jours_passes=bool(utilisateur.autorise_jours_passes),
     )
@@ -599,9 +599,9 @@ def mot_de_passe_oublie(
 
     code = f"{secrets.randbelow(900000) + 100000}"
     expiration = datetime.utcnow() + timedelta(minutes=15)
-    db.query(models.MotDePasseOublie).filter(models.MotDePasseOublie.utilisateur_id == utilisateur_courant.id).delete()
+    db.query(models.MotDePasseOublie).filter(models.MotDePasseOublie.utilisateur_id == utilisateur.id).delete()
     db.add(models.MotDePasseOublie(
-        utilisateur_id=utilisateur_courant.id,
+        utilisateur_id=utilisateur.id,
         code_hash=hasher_mot_de_passe(code),
         expire_le=expiration,
     ))
@@ -622,7 +622,7 @@ def mot_de_passe_reinitialiser(
 
     reset = (
         db.query(models.MotDePasseOublie)
-        .filter(models.MotDePasseOublie.utilisateur_id == utilisateur_courant.id)
+        .filter(models.MotDePasseOublie.utilisateur_id == utilisateur.id)
         .order_by(models.MotDePasseOublie.cree_le.desc())
         .first()
     )
@@ -638,13 +638,13 @@ def mot_de_passe_reinitialiser(
 
 
 @app.get("/api/me")
-def me(utilisateur: models.Utilisateur = Depends(get_utilisateur_courant)):
+def me(utilisateur: models.Utilisateur = Depends(get_utilisateur)):
     return {
-        "id": utilisateur_courant.id,
+        "id": utilisateur.id,
         "nom": utilisateur.nom,
         "prenom": utilisateur.prenom,
         "matricule": utilisateur.matricule,
-        "role": utilisateur_courant.role.value,
+        "role": utilisateur.role.value,
         "autorise_weekend": bool(utilisateur.autorise_weekend),
         "autorise_jours_passes": bool(utilisateur.autorise_jours_passes),
         "numero_telephone": utilisateur.numero_telephone,
@@ -653,10 +653,10 @@ def me(utilisateur: models.Utilisateur = Depends(get_utilisateur_courant)):
 
 @app.get("/api/utilisateurs")
 def lister_utilisateurs_pour_admin(
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     return [
         {
@@ -680,10 +680,10 @@ def lister_utilisateurs_pour_admin(
 def toggle_autorise_weekend(
     utilisateur_id: int,
     payload: schemas.AutoriseWeekendRequete | None = Body(default=None),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     cible = db.get(models.Utilisateur, utilisateur_id)
     if not cible:
@@ -701,10 +701,10 @@ def toggle_autorise_weekend(
 def toggle_autorise_jours_passes(
     utilisateur_id: int,
     payload: schemas.AutoriseJoursPassesRequete | None = Body(default=None),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     cible = db.get(models.Utilisateur, utilisateur_id)
     if not cible:
@@ -722,10 +722,10 @@ def toggle_autorise_jours_passes(
 def modifier_telephone_utilisateur(
     utilisateur_id: int,
     payload: schemas.TelephoneUtilisateurRequete,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     cible = db.get(models.Utilisateur, utilisateur_id)
     if not cible:
@@ -738,7 +738,7 @@ def modifier_telephone_utilisateur(
 
 @app.get("/api/jours_feries", response_model=list[schemas.JourFerieReponse])
 def lister_jours_feries(
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     return db.query(models.JourFerie).order_by(models.JourFerie.date).all()
@@ -747,10 +747,10 @@ def lister_jours_feries(
 @app.post("/api/jours_feries", response_model=schemas.JourFerieReponse)
 def creer_jour_ferie(
     jour: schemas.JourFerieCreation,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     existing = db.query(models.JourFerie).filter(models.JourFerie.date == jour.date).first()
     if existing:
@@ -773,10 +773,10 @@ def creer_jour_ferie(
 def modifier_jour_ferie(
     jour_ferie_id: int,
     jour: schemas.JourFerieCreation,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     entree = db.get(models.JourFerie, jour_ferie_id)
     if not entree:
@@ -812,7 +812,7 @@ async def creer_demande(
     conges_par_jour: str | None = Form(None),
     localisation_json: str | None = Form(None),
     fichiers: list[UploadFile] | None = File(None),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     # Autorise la crÃ©ation pour les techniciens et superviseurs (normaux et shift)
@@ -822,11 +822,11 @@ async def creer_demande(
         models.RoleUtilisateur.SUPERVISEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
     }
-    if utilisateur_courant.role not in allowed_roles:
+    if utilisateur.role not in allowed_roles:
         raise HTTPException(status_code=403, detail="AccÃ¨s refusÃ© : rÃ´le non autorisÃ© Ã  crÃ©er une demande")
 
     # Pour les techniciens (non-supervisors) on exige qu'un superviseur soit associÃ©
-    if utilisateur_courant.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT} and not utilisateur.superviseur_id:
+    if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT} and not utilisateur.superviseur_id:
         raise HTTPException(status_code=400, detail="Aucun superviseur n'est associÃ© Ã  ce technicien")
 
     date_demande = aujourdhui_maroc()
@@ -848,7 +848,7 @@ async def creer_demande(
 
     demande_existante = (
         db.query(models.Demande)
-        .filter(models.Demande.technicien_id == utilisateur_courant.id)
+        .filter(models.Demande.technicien_id == utilisateur.id)
         .filter(models.Demande.date_demande == date_demande)
         .filter(models.Demande.est_archive.is_(False))
         .first()
@@ -859,7 +859,7 @@ async def creer_demande(
             detail="Une seule demande est autorisÃ©e par jour. Ouvrez la demande existante pour la modifier.",
         )
 
-    if utilisateur_courant.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
+    if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
         if not peut_saisir_weekend(utilisateur):
             for cle in set((normales_dict or {}).keys()) | set((supps_dict or {}).keys()) | set((conges_dict or {}).keys()):
                 if not jour_a_du_contenu(normales_dict, supps_dict, conges_dict, cle):
@@ -868,16 +868,16 @@ async def creer_demande(
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisÃ©e pour votre rÃ´le")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if payload_contient_jours_passes(normales_dict, supps_dict, conges_dict, date_demande) and not peut_saisir_jours_passes(utilisateur):
             raise HTTPException(status_code=403, detail="La saisie des jours passÃ©s nÃ©cessite l'autorisation d'un administrateur")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
             if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens Shift ne peuvent saisir que la date du jour")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
         if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
             if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
@@ -909,8 +909,8 @@ async def creer_demande(
         localisation = geolocaliser_ip(ip_client)
 
     demande = models.Demande(
-        reference=f"DEM-{maintenant_maroc():%Y%m%d%H%M%S}-{utilisateur_courant.id}",
-        technicien_id=utilisateur_courant.id,
+        reference=f"DEM-{maintenant_maroc():%Y%m%d%H%M%S}-{utilisateur.id}",
+        technicien_id=utilisateur.id,
         superviseur_id=utilisateur.superviseur_id,
         departement_id=utilisateur.departement_id,
         equipe_id=utilisateur.equipe_id,
@@ -954,7 +954,7 @@ async def creer_demande(
                 chemin_stockage=chemin_stockage,
                 taille_octets=len(contenu),
                 type_mime=fichier.content_type,
-                televerse_par_id=utilisateur_courant.id,
+                televerse_par_id=utilisateur.id,
             ))
         db.commit()
 
@@ -963,7 +963,7 @@ async def creer_demande(
         version=1,
         type_action=models.TypeActionHistorique.SOUMISSION if soumettre else models.TypeActionHistorique.CREATION,
         instantane_donnees={"statut": demande.statut.value, "heures_travaillees": str(total)},
-        modifie_par_id=utilisateur_courant.id,
+        modifie_par_id=utilisateur.id,
     ))
     if soumettre:
         notifier_utilisateur(
@@ -981,11 +981,11 @@ async def creer_demande(
 async def ajouter_pieces_jointes(
     demande_id: int,
     fichiers: list[UploadFile] | None = File(None),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     demande = db.get(models.Demande, demande_id)
-    if not demande or demande.technicien_id != utilisateur_courant.id:
+    if not demande or demande.technicien_id != utilisateur.id:
         raise HTTPException(status_code=404, detail="Demande introuvable")
 
     if not fichiers:
@@ -1006,7 +1006,7 @@ async def ajouter_pieces_jointes(
             chemin_stockage=chemin_stockage,
             taille_octets=len(contenu),
             type_mime=fichier.content_type,
-            televerse_par_id=utilisateur_courant.id,
+            televerse_par_id=utilisateur.id,
         ))
     db.commit()
     return {"detail": "Fichiers enregistrÃ©s"}
@@ -1016,14 +1016,14 @@ async def ajouter_pieces_jointes(
 def lister_demandes(
     statut: str | None = None,
     archived: bool = False,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     requete = db.query(models.Demande)
-    if utilisateur_courant.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT}:
-        requete = requete.filter(models.Demande.technicien_id == utilisateur_courant.id)
-    elif utilisateur_courant.role in {models.RoleUtilisateur.SUPERVISEUR, models.RoleUtilisateur.SUPERVISEUR_SHIFT}:
-        requete = requete.filter(models.Demande.superviseur_id == utilisateur_courant.id)
+    if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT}:
+        requete = requete.filter(models.Demande.technicien_id == utilisateur.id)
+    elif utilisateur.role in {models.RoleUtilisateur.SUPERVISEUR, models.RoleUtilisateur.SUPERVISEUR_SHIFT}:
+        requete = requete.filter(models.Demande.superviseur_id == utilisateur.id)
     # l'administrateur voit tout, pas de filtre
 
     # Filtre sur archivÃ© / non archivÃ© (par dÃ©faut on montre seulement non-archivÃ©)
@@ -1044,10 +1044,10 @@ def lister_demandes(
 @app.get("/api/demandes/export")
 def exporter_demandes(
     statut: str | None = None,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
 
     requete = db.query(models.Demande)
@@ -1101,7 +1101,7 @@ def exporter_demandes(
 @app.delete("/api/demandes/{demande_id}")
 def supprimer_demande(
     demande_id: int,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     """Marque une demande brouillon comme archivÃ©e (soft delete). Seul le technicien
@@ -1113,14 +1113,14 @@ def supprimer_demande(
         raise HTTPException(status_code=404, detail="Demande introuvable")
 
     # Technicien owners can only archive their own brouillons
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN:
-        if demande.technicien_id != utilisateur_courant.id:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
+        if demande.technicien_id != utilisateur.id:
             raise HTTPException(status_code=403, detail="AccÃ¨s refusÃ©")
         if demande.statut != models.StatutDemande.BROUILLON:
             raise HTTPException(status_code=400, detail="Seules les demandes en brouillon peuvent Ãªtre supprimÃ©es")
     else:
         # Administrateurs peuvent archiver n'importe quelle demande
-        if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+        if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
             raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ©")
 
     demande.est_archive = True
@@ -1131,10 +1131,10 @@ def supprimer_demande(
 @app.put("/api/demandes/{demande_id}/restore", response_model=schemas.DemandeReponse)
 def restaurer_demande(
     demande_id: int,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     demande = db.get(models.Demande, demande_id)
     if not demande:
@@ -1150,11 +1150,11 @@ def restaurer_demande(
 @app.put("/api/demandes/{demande_id}/allow_retro", response_model=schemas.DemandeReponse)
 def autoriser_modification_retro(
     demande_id: int,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     """Endpoint rÃ©servÃ© aux administrateurs pour autoriser la modification rÃ©troactive d'une demande."""
-    if utilisateur_courant.role != models.RoleUtilisateur.ADMINISTRATEUR:
+    if utilisateur.role != models.RoleUtilisateur.ADMINISTRATEUR:
         raise HTTPException(status_code=403, detail="AccÃ¨s rÃ©servÃ© aux administrateurs")
     demande = db.get(models.Demande, demande_id)
     if not demande:
@@ -1169,15 +1169,15 @@ def autoriser_modification_retro(
 def modifier_demande(
     demande_id: int,
     donnees: schemas.DemandeCreation,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
     # Autorise les techniciens normaux et shift Ã  modifier leurs demandes
-    if utilisateur_courant.role not in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT}:
+    if utilisateur.role not in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.TECHNICIEN_SHIFT}:
         raise HTTPException(status_code=403, detail="Seul un technicien peut modifier une demande")
 
     demande = db.get(models.Demande, demande_id)
-    if not demande or demande.technicien_id != utilisateur_courant.id:
+    if not demande or demande.technicien_id != utilisateur.id:
         raise HTTPException(status_code=404, detail="Demande introuvable")
     if demande.statut not in {models.StatutDemande.BROUILLON, models.StatutDemande.RETOUR_MODIFICATION}:
         raise HTTPException(status_code=400, detail="Cette demande ne peut Ãªtre modifiÃ©e que si elle est en brouillon ou en retour de supervision")
@@ -1190,7 +1190,7 @@ def modifier_demande(
     jours_nommes = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
     jour_courant = jours_nommes[date_demande.weekday()]
 
-    if utilisateur_courant.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
+    if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
         if not utilisateur.autorise_weekend:
             for cle in set((normales_candidate or {}).keys()) | set((supps_candidate or {}).keys()) | set((conges_candidate or {}).keys()):
                 if not jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, cle):
@@ -1199,15 +1199,15 @@ def modifier_demande(
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisÃ©e pour votre rÃ´le")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if payload_contient_jours_passes(normales_candidate, supps_candidate, conges_candidate, date_demande) and not peut_saisir_jours_passes(utilisateur):
             raise HTTPException(status_code=403, detail="La modification des jours passÃ©s nÃ©cessite l'autorisation d'un administrateur")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
         if demande.date_demande < aujourdhui_maroc() and not demande.autorise_modification_retro:
             raise HTTPException(status_code=403, detail="Modification d'une journÃ©e passÃ©e non autorisÃ©e. Contactez un administrateur.")
 
-    if utilisateur_courant.role == models.RoleUtilisateur.TECHNICIEN:
+    if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
         if jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, jour_courant):
             if demande.date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
@@ -1268,7 +1268,7 @@ def modifier_demande(
             "heures_normales": str(normales),
             "heures_supplementaires": str(supp),
         },
-        modifie_par_id=utilisateur_courant.id,
+        modifie_par_id=utilisateur.id,
     ))
     if donnees.soumettre:
         notifier_utilisateur(
@@ -1287,14 +1287,14 @@ def modifier_demande(
 def valider_demande(
     demande_id: int,
     requete: schemas.ValidationRequete,
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
     db: Session = Depends(get_db),
 ):
-    if utilisateur_courant.role != models.RoleUtilisateur.SUPERVISEUR and utilisateur_courant.role != models.RoleUtilisateur.SUPERVISEUR_SHIFT:
+    if utilisateur.role != models.RoleUtilisateur.SUPERVISEUR and utilisateur.role != models.RoleUtilisateur.SUPERVISEUR_SHIFT:
         raise HTTPException(status_code=403, detail="Seul un superviseur peut valider une demande")
 
     demande = db.get(models.Demande, demande_id)
-    if not demande or demande.superviseur_id != utilisateur_courant.id:
+    if not demande or demande.superviseur_id != utilisateur.id:
         raise HTTPException(status_code=404, detail="Demande introuvable")
     if demande.statut != models.StatutDemande.EN_ATTENTE:
         raise HTTPException(status_code=400, detail="Cette demande n'est plus en attente")
@@ -1321,7 +1321,7 @@ def valider_demande(
 
     db.add(models.Validation(
         demande_id=demande.id,
-        validateur_id=utilisateur_courant.id,
+        validateur_id=utilisateur.id,
         action=action_enum,
         commentaire=requete.commentaire,
         heures_travaillees_modifiees=requete.heures_travaillees_modifiees,
@@ -1347,11 +1347,11 @@ def valider_demande(
 def creer_planning_shift(
     data: schemas.PlanningShiftCreation,
     db: Session = Depends(get_db),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
 ):
     """CrÃ©er/assigner un shift Ã  un utilisateur pour une date spÃ©cifique."""
     # Seul l'administrateur ou superviseur SHIFT peut assigner des shifts
-    if utilisateur_courant.role not in {
+    if utilisateur.role not in {
         models.RoleUtilisateur.ADMINISTRATEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
     }:
@@ -1400,7 +1400,7 @@ def recuperer_shifts_utilisateur(
     utilisateur_id: int,
     semaine: str | None = None,  # Format: "2024-W05" (ISO 8601 week)
     db: Session = Depends(get_db),
-    current_utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
 ):
     """RÃ©cupÃ©rer les shifts assignÃ©s Ã  un utilisateur.
     
@@ -1408,12 +1408,9 @@ def recuperer_shifts_utilisateur(
     Sinon, retourne tous les shifts.
     """
     # VÃ©rifier que l'utilisateur peut accÃ©der Ã  ces donnÃ©es
-    utilisateur = db.query(models.Utilisateur).filter(models.utilisateur_courant.id == current_user_id).first()
-    if not utilisateur:
-        raise HTTPException(status_code=401, detail="Non authentifiÃ©")
     
     # L'utilisateur peut voir ses propres shifts OU l'administrateur/superviseur peut voir tout
-    if utilisateur_courant.id != utilisateur_id and utilisateur_courant.role not in {
+    if utilisateur.id != utilisateur_id and utilisateur.role not in {
         models.RoleUtilisateur.ADMINISTRATEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
         models.RoleUtilisateur.SUPERVISEUR,
@@ -1450,15 +1447,12 @@ def recuperer_shifts_utilisateur(
 def recuperer_shift_actuel(
     utilisateur_id: int,
     db: Session = Depends(get_db),
-    current_utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
 ):
     """RÃ©cupÃ©rer le shift assignÃ© pour aujourd'hui."""
     # MÃªme vÃ©rification d'autorisation que /api/planning-shift/{utilisateur_id}
-    utilisateur = db.query(models.Utilisateur).filter(models.utilisateur_courant.id == current_user_id).first()
-    if not utilisateur:
-        raise HTTPException(status_code=401, detail="Non authentifiÃ©")
     
-    if utilisateur_courant.id != utilisateur_id and utilisateur_courant.role not in {
+    if utilisateur.id != utilisateur_id and utilisateur.role not in {
         models.RoleUtilisateur.ADMINISTRATEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
         models.RoleUtilisateur.SUPERVISEUR,
@@ -1479,10 +1473,10 @@ def modifier_planning_shift(
     shift_id: int,
     data: schemas.PlanningShiftCreation,
     db: Session = Depends(get_db),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
 ):
     """Modifier un shift existant."""
-    if utilisateur_courant.role not in {
+    if utilisateur.role not in {
         models.RoleUtilisateur.ADMINISTRATEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
     }:
@@ -1507,10 +1501,10 @@ def modifier_planning_shift(
 def supprimer_planning_shift(
     shift_id: int,
     db: Session = Depends(get_db),
-    utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
+    utilisateur: models.Utilisateur = Depends(get_utilisateur),
 ):
     """Supprimer un shift."""
-    if utilisateur_courant.role not in {
+    if utilisateur.role not in {
         models.RoleUtilisateur.ADMINISTRATEUR,
         models.RoleUtilisateur.SUPERVISEUR_SHIFT,
     }:
@@ -1553,4 +1547,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     reload_mode = os.environ.get("RELOAD", "0") == "1" and not os.environ.get("WEBSITE_SITE_NAME")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
+
+
+
 
