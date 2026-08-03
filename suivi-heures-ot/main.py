@@ -90,6 +90,60 @@ def geolocaliser_ip(ip: str) -> dict[str, str] | None:
     return {"ip": ip, "ville": "", "pays": ""}
 
 
+def serialiser_export_json(valeur):
+    def compacter(val):
+        if isinstance(val, dict):
+            resultat = {}
+            for cle, sous_valeur in val.items():
+                valeur_compactee = compacter(sous_valeur)
+                if valeur_compactee in (None, "", [], {}):
+                    continue
+                resultat[cle] = valeur_compactee
+            return resultat
+        if isinstance(val, list):
+            resultat = []
+            for element in val:
+                element_compact = compacter(element)
+                if element_compact in (None, "", [], {}):
+                    continue
+                resultat.append(element_compact)
+            return resultat
+        return val
+
+    if valeur is None:
+        return ""
+    if isinstance(valeur, str):
+        try:
+            valeur = json.loads(valeur)
+        except (json.JSONDecodeError, TypeError):
+            return valeur
+    compacte = compacter(valeur)
+    if compacte in (None, "", [], {}):
+        return ""
+    return json.dumps(compacte, ensure_ascii=False, default=str)
+
+
+def localiser_donnees_export(demande):
+    localisation = demande.localisation or {}
+    if isinstance(localisation, str):
+        try:
+            localisation = json.loads(localisation)
+        except (json.JSONDecodeError, TypeError):
+            localisation = {}
+    if not isinstance(localisation, dict):
+        localisation = {}
+    return {
+        "localisation_source": localisation.get("source", ""),
+        "localisation_ville": localisation.get("ville", ""),
+        "localisation_pays": localisation.get("pays", ""),
+        "localisation_ip": localisation.get("ip", ""),
+        "localisation_latitude": localisation.get("latitude", localisation.get("lat", "")),
+        "localisation_longitude": localisation.get("longitude", localisation.get("lng", "")),
+        "localisation_precision_m": localisation.get("accuracy_m", localisation.get("accuracy", "")),
+        "localisation_json": serialiser_export_json(localisation),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Authentification : rÃ©cupÃ©rer l'utilisateur courant Ã  partir du token JWT
 # --------------------------------------------------------------------------- #
@@ -1057,13 +1111,21 @@ def exporter_demandes(
         except ValueError:
             raise HTTPException(status_code=400, detail="Statut de filtre invalide")
 
+    demandes = requete.order_by(models.Demande.date_demande.desc()).all()
     sorties = io.StringIO(newline="")
     writer = csv.writer(sorties, delimiter=';')
     writer.writerow([
         "Reference",
+        "Cree le",
+        "Modifie le",
         "Technicien",
         "Superviseur",
         "Date demande",
+        "Est archive",
+        "Conge",
+        "Autorise modification retro",
+        "Departement ID",
+        "Equipe ID",
         "Equipement",
         "OT SAP",
         "Type intervention",
@@ -1071,14 +1133,79 @@ def exporter_demandes(
         "Heures travaillees",
         "Heures normales",
         "Heures supplementaires",
+        "Heure debut",
+        "Heure fin",
+        "Heures normales par jour",
+        "Heures supplementaires par jour",
+        "Conges par jour",
         "Regle OT appliquee",
+        "Description travaux",
+        "Justification OT",
+        "Commentaires",
+        "Envoyee le",
+        "Traitee le",
+        "Localisation source",
+        "Localisation ville",
+        "Localisation pays",
+        "Localisation IP",
+        "Localisation latitude",
+        "Localisation longitude",
+        "Localisation precision m",
+        "Localisation JSON",
+        "Donnees compactes JSON",
     ])
-    for demande in db.query(models.Demande).order_by(models.Demande.date_demande.desc()).all():
+    for demande in demandes:
+        localisation = localiser_donnees_export(demande)
+        donnees_compactes = {
+            "reference": demande.reference,
+            "cree_le": demande.cree_le.isoformat() if demande.cree_le else "",
+            "modifie_le": demande.modifie_le.isoformat() if demande.modifie_le else "",
+            "technicien": {
+                "matricule": demande.technicien.matricule if demande.technicien else "",
+                "nom": f"{demande.technicien.prenom} {demande.technicien.nom}".strip() if demande.technicien else "",
+            },
+            "superviseur": {
+                "matricule": demande.superviseur.matricule if demande.superviseur else "",
+                "nom": f"{demande.superviseur.prenom} {demande.superviseur.nom}".strip() if demande.superviseur else "",
+            },
+            "date_demande": demande.date_demande.isoformat() if demande.date_demande else "",
+            "est_archive": demande.est_archive,
+            "conge": demande.conge,
+            "autorise_modification_retro": demande.autorise_modification_retro,
+            "departement_id": demande.departement_id,
+            "equipe_id": demande.equipe_id,
+            "heures_travaillees": str(demande.heures_travaillees),
+            "heures_normales": str(demande.heures_normales),
+            "heures_supplementaires": str(demande.heures_supplementaires),
+            "heure_debut": demande.heure_debut.isoformat() if demande.heure_debut else "",
+            "heure_fin": demande.heure_fin.isoformat() if demande.heure_fin else "",
+            "heures_normales_par_jour": demande.heures_normales_par_jour,
+            "heures_supplementaires_par_jour": demande.heures_supplementaires_par_jour,
+            "conges_par_jour": demande.conges_par_jour,
+            "regle_ot_appliquee_id": demande.regle_ot_appliquee_id,
+            "equipement": demande.equipement or "",
+            "ordre_travail_sap": demande.ordre_travail_sap or "",
+            "type_intervention": demande.type_intervention.value if demande.type_intervention else "",
+            "description_travaux": demande.description_travaux or "",
+            "justification_ot": demande.justification_ot or "",
+            "commentaires": demande.commentaires or "",
+            "statut": demande.statut.value,
+            "envoyee_le": demande.envoyee_le.isoformat() if demande.envoyee_le else "",
+            "traitee_le": demande.traitee_le.isoformat() if demande.traitee_le else "",
+            "localisation": demande.localisation,
+        }
         writer.writerow([
             demande.reference,
+            demande.cree_le.isoformat() if demande.cree_le else "",
+            demande.modifie_le.isoformat() if demande.modifie_le else "",
             f"{demande.technicien.prenom} {demande.technicien.nom}" if demande.technicien else "",
             f"{demande.superviseur.prenom} {demande.superviseur.nom}" if demande.superviseur else "",
-            demande.date_demande,
+            demande.date_demande.isoformat() if demande.date_demande else "",
+            str(bool(demande.est_archive)),
+            str(bool(demande.conge)),
+            str(bool(demande.autorise_modification_retro)),
+            str(demande.departement_id or ""),
+            str(demande.equipe_id or ""),
             demande.equipement or "",
             demande.ordre_travail_sap or "",
             demande.type_intervention.value if demande.type_intervention else "",
@@ -1086,7 +1213,26 @@ def exporter_demandes(
             str(demande.heures_travaillees),
             str(demande.heures_normales),
             str(demande.heures_supplementaires),
+            demande.heure_debut.isoformat() if demande.heure_debut else "",
+            demande.heure_fin.isoformat() if demande.heure_fin else "",
+            serialiser_export_json(demande.heures_normales_par_jour),
+            serialiser_export_json(demande.heures_supplementaires_par_jour),
+            serialiser_export_json(demande.conges_par_jour),
             str(demande.regle_ot_appliquee_id or ""),
+            demande.description_travaux or "",
+            demande.justification_ot or "",
+            demande.commentaires or "",
+            demande.envoyee_le.isoformat() if demande.envoyee_le else "",
+            demande.traitee_le.isoformat() if demande.traitee_le else "",
+            localisation["localisation_source"],
+            localisation["localisation_ville"],
+            localisation["localisation_pays"],
+            localisation["localisation_ip"],
+            localisation["localisation_latitude"],
+            localisation["localisation_longitude"],
+            localisation["localisation_precision_m"],
+            localisation["localisation_json"],
+            serialiser_export_json(donnees_compactes),
         ])
     contenus = sorties.getvalue().encode("utf-8")
     return StreamingResponse(
@@ -1549,6 +1695,3 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     reload_mode = os.environ.get("RELOAD", "0") == "1" and not os.environ.get("WEBSITE_SITE_NAME")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
-
-
-
