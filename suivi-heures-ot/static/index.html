@@ -2325,8 +2325,17 @@
         initialiserSemaine(calculerJoursAffichesTechnicien(demandes, utilisateurCourant ? utilisateurCourant.role : ""));
         await chargerShiftDuJour();  // Charger les info du shift
         const soumises = demandes.filter((d) => d.statut !== "brouillon");
-        const totalHeures = soumises.reduce((acc, d) => acc + Number(d.heures_travaillees || 0), 0);
-        const totalSupp = soumises.reduce((acc, d) => acc + Number(d.heures_supplementaires || 0), 0);
+        
+        // Recalculate totals from the breakdown to match the detailed display
+        let totalHeures = 0;
+        let totalSupp = 0;
+        soumises.forEach((d) => {
+          const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+          const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
+          totalHeures += normales + supp;
+          totalSupp += supp;
+        });
+        
         const attente = soumises.filter((d) => d.statut === "en_attente").length;
 
         const resume = `
