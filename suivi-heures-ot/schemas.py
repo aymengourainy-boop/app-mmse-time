@@ -58,6 +58,7 @@ class DemandeCreation(BaseModel):
     heures_supplementaires_par_jour: dict[str, float | None] | None = None
     conges_par_jour: dict[str, bool | None] | None = None
     soumettre: bool = False  # False = brouillon, True = envoi direct au superviseur
+    localisation: dict[str, str] | None = None  # {"ville": "Rabat", "pays": "Maroc", "ip": "..."}
 
 
 class AutoriseWeekendRequete(BaseModel):

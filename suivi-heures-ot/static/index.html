@@ -877,6 +877,8 @@
       const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
       const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
       const meta = STATUS_META[d.statut] || STATUS_META.en_attente;
+      const localisation = d.localisation || {};
+      const lieuTexte = localisation.ville ? `📍 ${escapeHtml(localisation.ville)}, ${escapeHtml(localisation.pays || "")}`.trim() : "📍 Localisation inconnue";
 
       if (d.statut === "brouillon") {
         return `
@@ -884,6 +886,7 @@
             <div class="request-header">
               <div>
                 <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+                <div class="request-meta">${lieuTexte}</div>
                 <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
                 <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
               </div>
@@ -900,6 +903,7 @@
             <div class="request-header">
               <div>
                 <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+                <div class="request-meta">${lieuTexte}</div>
                 <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
                 <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
                 <div class="request-meta">Normales : <b>${formatHeures(normales)}h</b> · supp. : <b>${formatHeures(supp)}h</b></div>
@@ -916,6 +920,7 @@
           <div class="request-header">
             <div>
               <div class="request-meta"><b>Jour : ${escapeHtml(formatDateDemande(d.date_demande))}</b></div>
+              <div class="request-meta">${lieuTexte}</div>
               <div class="request-meta">${escapeHtml(d.equipement || "Équipement non précisé")}</div>
               <div class="request-meta">OT: ${escapeHtml(d.ordre_travail_sap || "—")} · ${formatHeures(d.heures_travaillees)}h totales</div>
               <div class="request-meta">Normales : <b>${formatHeures(normales)}h</b> · supp. : <b>${formatHeures(supp)}h</b></div>
@@ -2094,6 +2099,22 @@
       formData.append("heures_supplementaires_par_jour", JSON.stringify(supps));
       formData.append("conges_par_jour", JSON.stringify(conges));
       formData.append("soumettre", soumettre ? "true" : "false");
+      
+      // Ajouter la localisation du client
+      try {
+        const geoResponse = await fetch("https://ipapi.co/json/");
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          formData.append("localisation_json", JSON.stringify({
+            ville: geoData.city || "",
+            pays: geoData.country_name || "",
+            ip: geoData.ip || ""
+          }));
+        }
+      } catch (e) {
+        console.warn("Localisation non disponible", e);
+      }
+      
       for (let i = 0; i < fichiers.length; i++) {
         formData.append("fichiers", fichiers[i]);
       }

@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 from email.message import EmailMessage
 
-from fastapi import Depends, FastAPI, HTTPException, status, Header, UploadFile, File, Form, Body
+from fastapi import Depends, FastAPI, HTTPException, status, Header, UploadFile, File, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -54,6 +54,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --------------------------------------------------------------------------- #
+# Géolocalisation basée sur l'IP
+# --------------------------------------------------------------------------- #
+
+def obtenir_ip_client(request: Request) -> str:
+    """Récupère l'IP réelle du client (supporte les proxies)"""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client_host = request.client.host if request.client else "127.0.0.1"
+    return client_host
+
+
+def geolocaliser_ip(ip: str) -> dict[str, str] | None:
+    """Utilise ip-api.com (API gratuite) pour géolocaliser une IP"""
+    if ip.startswith("127.") or ip.startswith("192.168.") or ip.startswith("10."):
+        return None  # Skip local IPs
+    try:
+        url = f"http://ip-api.com/json/{ip}?fields=country,city,status"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            data = json.loads(response.read().decode())
+            if data.get("status") == "success":
+                return {
+                    "ville": data.get("city", ""),
+                    "pays": data.get("country", ""),
+                    "ip": ip
+                }
+    except Exception as e:
+        logger.warning(f"Erreur géolocalisation IP {ip}: {e}")
+    return {"ip": ip, "ville": "", "pays": ""}
 
 
 # --------------------------------------------------------------------------- #
@@ -691,6 +723,7 @@ def modifier_jour_ferie(
 
 @app.post("/api/demandes", response_model=schemas.DemandeReponse)
 async def creer_demande(
+    request: Request,
     equipement: str | None = Form(None),
     ordre_travail_sap: str | None = Form(None),
     type_intervention: str | None = Form(None),
@@ -702,6 +735,7 @@ async def creer_demande(
     heures_normales_par_jour: str | None = Form(None),
     heures_supplementaires_par_jour: str | None = Form(None),
     conges_par_jour: str | None = Form(None),
+    localisation_json: str | None = Form(None),
     fichiers: list[UploadFile] | None = File(None),
     utilisateur: models.Utilisateur = Depends(get_utilisateur_courant),
     db: Session = Depends(get_db),
@@ -789,8 +823,20 @@ async def creer_demande(
     else:
         total, normales, supp = breakdown
 
-    # Stocke la justification globale si fournie.
+     # Stocke la justification globale si fournie.
     justification_stockee = justification_ot if justification_ot else None
+
+    # Récupère et géolocalise l'IP du client
+    localisation = None
+    if localisation_json:
+        try:
+            localisation = json.loads(localisation_json)
+        except (json.JSONDecodeError, TypeError):
+            localisation = None
+    
+    if not localisation:
+        ip_client = obtenir_ip_client(request)
+        localisation = geolocaliser_ip(ip_client)
 
     demande = models.Demande(
         reference=f"DEM-{datetime.now():%Y%m%d%H%M%S}-{utilisateur.id}",
@@ -816,6 +862,7 @@ async def creer_demande(
         commentaires=commentaires,
         statut=models.StatutDemande.EN_ATTENTE if soumettre else models.StatutDemande.BROUILLON,
         envoyee_le=datetime.utcnow() if soumettre else None,
+        localisation=localisation,
     )
     db.add(demande)
     db.commit()

@@ -324,6 +324,9 @@ class Demande(Base, TimestampMixin):
     # Aucune suppression physique : on archive plutôt que supprimer.
     est_archive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # --- Localisation ---
+    localisation: Mapped[dict | None] = mapped_column(JSONVariant, default=None)  # {"ville": "Rabat", "pays": "Maroc", "ip": "197.0.0.1"}
+
     # --- Relations ---
     technicien: Mapped["Utilisateur"] = relationship(
         foreign_keys=[technicien_id], back_populates="demandes"
