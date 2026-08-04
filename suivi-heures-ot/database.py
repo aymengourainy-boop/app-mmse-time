@@ -15,12 +15,29 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 import models
 
-APP_DATA_DIR = Path(
-    os.environ.get(
-        "APP_DATA_DIR",
-        "/home/site/data" if os.environ.get("WEBSITE_SITE_NAME") else ".",
-    )
-).resolve()
+def _get_app_data_dir() -> Path:
+    """Détermine le répertoire de stockage des données en fonction de l'environnement."""
+    # 1. Si DATABASE_URL est défini explicitement, utiliser le répertoire courant
+    if os.environ.get("DATABASE_URL"):
+        return Path(".").resolve()
+    
+    # 2. Sur Render (production)
+    if os.environ.get("RENDER"):
+        return Path("/var/data").resolve()
+    
+    # 3. Sur Azure App Service
+    if os.environ.get("WEBSITE_SITE_NAME"):
+        return Path("/home/site/data").resolve()
+    
+    # 4. Variable d'environnement explicite (si définie)
+    if os.environ.get("APP_DATA_DIR"):
+        return Path(os.environ.get("APP_DATA_DIR")).resolve()
+    
+    # 5. Par défaut, utiliser le répertoire courant (développement local)
+    return Path(".").resolve()
+
+
+APP_DATA_DIR = _get_app_data_dir()
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 

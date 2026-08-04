@@ -13,3 +13,5 @@ services:
     envVars:
       - key: APP_DATA_DIR
         value: /var/data
+      - key: RENDER
+        value: "true"
