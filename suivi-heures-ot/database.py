@@ -9,50 +9,32 @@ C'est le seul fichier à modifier pour changer de base de données.
 """
 
 import os
-import tempfile
 from datetime import date
 from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 import models
-import logging
-
-
-logger = logging.getLogger(__name__)
 
 def _get_app_data_dir() -> Path:
     """Détermine le répertoire de stockage des données en fonction de l'environnement."""
-    candidates: list[Path] = []
-
-    app_data_dir = os.environ.get("APP_DATA_DIR")
-    if app_data_dir:
-        candidates.append(Path(app_data_dir).expanduser().resolve())
-
-    if os.environ.get("RENDER"):
-        candidates.append(Path("/var/data"))
-
-    if os.environ.get("WEBSITE_SITE_NAME"):
-        candidates.append(Path("/home/site/data"))
-
+    # 1. Si DATABASE_URL est défini explicitement, utiliser le répertoire courant
     if os.environ.get("DATABASE_URL"):
-        candidates.append(Path(".").resolve())
-
-    candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
-    candidates.append(Path(".").resolve())
-
-    for candidate in candidates:
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            logger.warning("Impossible de preparer le repertoire de donnees %s: %s", candidate, exc)
-            continue
-
-        if os.access(candidate, os.W_OK | os.X_OK):
-            return candidate
-
-        logger.warning("Repertoire de donnees non inscriptible: %s", candidate)
-
-    raise RuntimeError("Aucun répertoire de stockage accessible n'a pu être préparé")
+        return Path(".").resolve()
+    
+    # 2. Sur Render (production)
+    if os.environ.get("RENDER"):
+        return Path("/var/data").resolve()
+    
+    # 3. Sur Azure App Service
+    if os.environ.get("WEBSITE_SITE_NAME"):
+        return Path("/home/site/data").resolve()
+    
+    # 4. Variable d'environnement explicite (si définie)
+    if os.environ.get("APP_DATA_DIR"):
+        return Path(os.environ.get("APP_DATA_DIR")).resolve()
+    
+    # 5. Par défaut, utiliser le répertoire courant (développement local)
+    return Path(".").resolve()
 
 
 APP_DATA_DIR = _get_app_data_dir()

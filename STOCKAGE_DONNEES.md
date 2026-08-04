@@ -19,13 +19,11 @@ La fonction `_get_app_data_dir()` detecte automatiquement l'environnement et uti
 ```
 
 **Ordre de priorite:**
-1. Si `APP_DATA_DIR` est defini → utiliser cette valeur
+1. Si `DATABASE_URL` est defini → utiliser le repertoire courant (PostgreSQL)
 2. Si `RENDER=true` → `/var/data` (disque persistant Render)
 3. Si `WEBSITE_SITE_NAME` existe → `/home/site/data` (Azure)
-4. Si `DATABASE_URL` est defini → utiliser le repertoire courant (PostgreSQL)
-5. Sinon → un chemin writable de secours, puis `./` en dernier recours
-
-Si le repertoire choisi n'est pas accessible au demarrage, l'application bascule automatiquement vers un chemin writable de secours afin d'eviter un crash au lancement.
+4. Si `APP_DATA_DIR` est defini → utiliser cette valeur
+5. Sinon → `./` (developpement local)
 
 ### 2. **Modification de render.yaml**
 
