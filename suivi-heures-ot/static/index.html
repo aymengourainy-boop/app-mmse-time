@@ -1424,11 +1424,11 @@
       const [sh, sm] = heure_debut.split(':').map(Number);
       const [eh, em] = heure_fin.split(':').map(Number);
       
-      let debut = new Date(); debut.setUTCHours(sh, sm, 0, 0);
-      let fin = new Date(); fin.setUTCHours(eh, em, 0, 0);
+      const debut = new Date(Date.UTC(2000, 0, 1, sh, sm, 0, 0));
+      const fin = new Date(Date.UTC(2000, 0, 1, eh, em, 0, 0));
       if (fin <= debut) fin.setUTCDate(fin.getUTCDate() + 1);
-      
-      const totalHeures = (fin - debut) / 3600000; // Convert ms to hours
+
+      const totalHeures = Math.round(((fin - debut) / 3600000) * 100) / 100;
       
       // Limites du shift
       const shiftLimites = {
@@ -1447,30 +1447,20 @@
       let heuresNormales = 0;
       
       if (typeShift === "nuit") {
-        // Cas spécial pour nuit (22-6, passe minuit)
-        if (sh >= 22) {
-          // Entre 22h et minuit
-          const minutesUntilMidnight = (24 - sh) * 60 + (60 - sm);
-          heuresNormales += minutesUntilMidnight / 60;
-        }
-        if (eh < 6 && sh < 22) {
-          // Entre minuit et 6h
-          heuresNormales += eh + em / 60;
-        } else if (eh >= 6 && sh >= 22) {
-          // Complètement après 22h
-          heuresNormales = 8;
-        }
+        const nuitDebut1 = new Date(Date.UTC(2000, 0, 1, 22, 0, 0, 0));
+        const nuitFin1 = new Date(Date.UTC(2000, 0, 2, 0, 0, 0, 0));
+        const nuitDebut2 = new Date(Date.UTC(2000, 0, 2, 0, 0, 0, 0));
+        const nuitFin2 = new Date(Date.UTC(2000, 0, 2, 6, 0, 0, 0));
+        heuresNormales = overlapHours(debut, fin, nuitDebut1, nuitFin1) + overlapHours(debut, fin, nuitDebut2, nuitFin2);
       } else {
         // Cas normal: matin (6-14) ou apres_midi (14-22)
-        if (sh >= limits.debut && sh < limits.fin) {
-          heuresNormales += Math.min(eh + em/60, limits.fin) - sh - sm/60;
-        } else if (sh < limits.debut && eh > limits.debut) {
-          heuresNormales = Math.min(eh + em/60, limits.fin) - limits.debut;
-        }
+        const shiftDebut = new Date(Date.UTC(2000, 0, 1, limits.debut, 0, 0, 0));
+        const shiftFin = new Date(Date.UTC(2000, 0, 1, limits.fin, 0, 0, 0));
+        heuresNormales = overlapHours(debut, fin, shiftDebut, shiftFin);
       }
       
-      heuresNormales = Math.min(heuresNormales, 8);
-      const heuresSupp = Math.max(0, totalHeures - heuresNormales);
+      heuresNormales = Math.min(Math.round(heuresNormales * 100) / 100, 8);
+      const heuresSupp = Math.max(0, Math.round((totalHeures - heuresNormales) * 100) / 100);
       
       return {
         total: totalHeures,
