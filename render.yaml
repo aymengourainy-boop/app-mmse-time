@@ -2,6 +2,7 @@ services:
   - type: web
     name: app-mmse-time
     env: python
+    branch: main
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
