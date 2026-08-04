@@ -2602,7 +2602,7 @@
           .sort()
           .map((nomTechnicien) => {
             const demandesTechnicien = groupesTechniciens[nomTechnicien];
-            return renderSectionDemandeTechnicien(nomTechnicien, demandesTechnicien, !(isAdmin && adminViewingArchived));
+            return renderSectionDemandeSuperviseur(nomTechnicien, demandesTechnicien, !(isAdmin && adminViewingArchived));
           })
           .join("");
         conteneur.innerHTML = sections;
