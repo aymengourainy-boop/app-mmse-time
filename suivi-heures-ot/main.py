@@ -144,6 +144,34 @@ def localiser_donnees_export(demande):
     }
 
 
+def validation_la_plus_recente(demande):
+    if not getattr(demande, "validations", None):
+        return None
+    return max(demande.validations, key=lambda validation: validation.id)
+
+
+def serialiser_validation_export(validation):
+    if not validation:
+        return {
+            "validation_action": "",
+            "validation_motif": "",
+            "validation_commentaire": "",
+            "validation_date": "",
+            "validation_valide_par": "",
+        }
+    return {
+        "validation_action": validation.action.value if validation.action else "",
+        "validation_motif": validation.motif_validation.value if validation.motif_validation else "",
+        "validation_commentaire": validation.commentaire or "",
+        "validation_date": validation.cree_le.isoformat() if validation.cree_le else "",
+        "validation_valide_par": (
+            f"{validation.validateur.prenom} {validation.validateur.nom}".strip()
+            if validation.validateur
+            else ""
+        ),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Authentification : rÃ©cupÃ©rer l'utilisateur courant Ã  partir du token JWT
 # --------------------------------------------------------------------------- #
@@ -1141,6 +1169,11 @@ def exporter_demandes(
         "Regle OT appliquee",
         "Description travaux",
         "Justification OT",
+        "Validation action",
+        "Validation motif",
+        "Validation commentaire",
+        "Validation date",
+        "Validation valide par",
         "Commentaires",
         "Envoyee le",
         "Traitee le",
@@ -1156,6 +1189,8 @@ def exporter_demandes(
     ])
     for demande in demandes:
         localisation = localiser_donnees_export(demande)
+        validation = validation_la_plus_recente(demande)
+        validation_export = serialiser_validation_export(validation)
         donnees_compactes = {
             "reference": demande.reference,
             "cree_le": demande.cree_le.isoformat() if demande.cree_le else "",
@@ -1193,6 +1228,13 @@ def exporter_demandes(
             "envoyee_le": demande.envoyee_le.isoformat() if demande.envoyee_le else "",
             "traitee_le": demande.traitee_le.isoformat() if demande.traitee_le else "",
             "localisation": demande.localisation,
+            "validation": {
+                "action": validation_export["validation_action"],
+                "motif": validation_export["validation_motif"],
+                "commentaire": validation_export["validation_commentaire"],
+                "date": validation_export["validation_date"],
+                "valide_par": validation_export["validation_valide_par"],
+            },
         }
         writer.writerow([
             demande.reference,
@@ -1221,6 +1263,11 @@ def exporter_demandes(
             str(demande.regle_ot_appliquee_id or ""),
             demande.description_travaux or "",
             demande.justification_ot or "",
+            validation_export["validation_action"],
+            validation_export["validation_motif"],
+            validation_export["validation_commentaire"],
+            validation_export["validation_date"],
+            validation_export["validation_valide_par"],
             demande.commentaires or "",
             demande.envoyee_le.isoformat() if demande.envoyee_le else "",
             demande.traitee_le.isoformat() if demande.traitee_le else "",
@@ -1448,6 +1495,8 @@ def valider_demande(
         raise HTTPException(status_code=400, detail="Cette demande n'est plus en attente")
     if not requete.commentaire or not requete.commentaire.strip():
         raise HTTPException(status_code=400, detail="Un commentaire est requis pour confirmer une demande")
+    if requete.action == "approuver" and not requete.motif_validation:
+        raise HTTPException(status_code=400, detail="Un motif est requis pour approuver une demande")
 
     action_map = {
         "approuver": (models.StatutDemande.APPROUVEE, models.ActionValidation.APPROUVER, models.TypeNotification.DEMANDE_APPROUVEE),
@@ -1471,6 +1520,7 @@ def valider_demande(
         demande_id=demande.id,
         validateur_id=utilisateur.id,
         action=action_enum,
+        motif_validation=requete.motif_validation,
         commentaire=requete.commentaire,
         heures_travaillees_modifiees=requete.heures_travaillees_modifiees,
         heures_supplementaires_modifiees=requete.heures_supplementaires_modifiees,

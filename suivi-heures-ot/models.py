@@ -116,6 +116,13 @@ class ActionValidation(str, enum.Enum):
     RETOURNER = "retourner"
 
 
+class MotifValidation(str, enum.Enum):
+    ARRET_SUBI = "arret_subi"
+    ARRET_PLANIFIE = "arret_planifie"
+    PROLONGATION = "prolongation"
+    MOBILISATION = "mobilisation"
+
+
 class TypePieceJointe(str, enum.Enum):
     PHOTO = "photo"
     DOCUMENT = "document"
@@ -434,6 +441,9 @@ class Validation(Base, TimestampMixin):
     validateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateurs.id"), nullable=False)
     action: Mapped[ActionValidation] = mapped_column(
         SAEnum(ActionValidation, name="action_validation"), nullable=False
+    )
+    motif_validation: Mapped[MotifValidation | None] = mapped_column(
+        SAEnum(MotifValidation, name="motif_validation")
     )
     commentaire: Mapped[str | None] = mapped_column(Text)
 

@@ -88,6 +88,34 @@ def localiser_donnees_export(demande):
     }
 
 
+def validation_la_plus_recente(demande):
+    if not getattr(demande, "validations", None):
+        return None
+    return max(demande.validations, key=lambda validation: validation.id)
+
+
+def serialiser_validation_export(validation):
+    if not validation:
+        return {
+            "validation_action": "",
+            "validation_motif": "",
+            "validation_commentaire": "",
+            "validation_date": "",
+            "validation_valide_par": "",
+        }
+    return {
+        "validation_action": validation.action.value if validation.action else "",
+        "validation_motif": validation.motif_validation.value if validation.motif_validation else "",
+        "validation_commentaire": validation.commentaire or "",
+        "validation_date": validation.cree_le.isoformat() if validation.cree_le else "",
+        "validation_valide_par": (
+            f"{validation.validateur.prenom} {validation.validateur.nom}".strip()
+            if validation.validateur
+            else ""
+        ),
+    }
+
+
 def compacter_donnees_export(demande):
     localisation = demande.localisation
     if isinstance(localisation, str):
@@ -115,6 +143,7 @@ def compacter_donnees_export(demande):
         "type_intervention": demande.type_intervention.value if demande.type_intervention else "",
         "description_travaux": demande.description_travaux or "",
         "justification_ot": demande.justification_ot or "",
+        "validation": serialiser_validation_export(validation_la_plus_recente(demande)),
         "commentaires": demande.commentaires or "",
         "envoyee_le": demande.envoyee_le.isoformat() if demande.envoyee_le else "",
         "traitee_le": demande.traitee_le.isoformat() if demande.traitee_le else "",
@@ -140,6 +169,11 @@ def to_csv(demandes, output_path: Path):
         "type_intervention",
         "description_travaux",
         "justification_ot",
+        "validation_action",
+        "validation_motif",
+        "validation_commentaire",
+        "validation_date",
+        "validation_valide_par",
         "commentaires",
         "envoyee_le",
         "traitee_le",
@@ -159,6 +193,7 @@ def to_csv(demandes, output_path: Path):
         for demande in demandes:
             localisation = localiser_donnees_export(demande)
             donnees_compactes = compacter_donnees_export(demande)
+            validation = serialiser_validation_export(validation_la_plus_recente(demande))
             writer.writerow({
                 "reference": demande.reference,
                 "date_demande": demande.date_demande.isoformat() if demande.date_demande else "",
@@ -174,6 +209,11 @@ def to_csv(demandes, output_path: Path):
                 "type_intervention": demande.type_intervention.value if demande.type_intervention else "",
                 "description_travaux": demande.description_travaux or "",
                 "justification_ot": demande.justification_ot or "",
+                "validation_action": validation["validation_action"],
+                "validation_motif": validation["validation_motif"],
+                "validation_commentaire": validation["validation_commentaire"],
+                "validation_date": validation["validation_date"],
+                "validation_valide_par": validation["validation_valide_par"],
                 "commentaires": demande.commentaires or "",
                 "envoyee_le": demande.envoyee_le.isoformat() if demande.envoyee_le else "",
                 "traitee_le": demande.traitee_le.isoformat() if demande.traitee_le else "",
@@ -194,6 +234,7 @@ def to_text(demandes, output_path: Path):
         for demande in demandes:
             localisation = localiser_donnees_export(demande)
             donnees_compactes = compacter_donnees_export(demande)
+            validation = serialiser_validation_export(validation_la_plus_recente(demande))
             lignes = [
                 ("Référence", demande.reference),
                 ("Date demande", demande.date_demande.isoformat() if demande.date_demande else ""),
@@ -215,6 +256,11 @@ def to_text(demandes, output_path: Path):
                 ("Type intervention", demande.type_intervention.value if demande.type_intervention else ""),
                 ("Description", demande.description_travaux or ""),
                 ("Justification OT", demande.justification_ot or ""),
+                ("Validation action", validation["validation_action"]),
+                ("Validation motif", validation["validation_motif"]),
+                ("Validation commentaire", validation["validation_commentaire"]),
+                ("Validation date", validation["validation_date"]),
+                ("Validation valide par", validation["validation_valide_par"]),
                 ("Commentaires", demande.commentaires or ""),
                 ("Envoyée le", demande.envoyee_le.isoformat() if demande.envoyee_le else ""),
                 ("Traitée le", demande.traitee_le.isoformat() if demande.traitee_le else ""),

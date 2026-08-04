@@ -1061,6 +1061,14 @@
             ${badgeStatut(d.statut)}
           </div>
           <div class="request-meta" style="margin-top:8px;">Détails des travaux : ${escapeHtml(d.description_travaux || "—")}</div>
+          <label>Motif de validation<span class="required-star">*</span></label>
+          <select id="motif-${d.id}">
+            <option value="">Sélectionner un motif</option>
+            <option value="arret_subi">Arrêt subi</option>
+            <option value="arret_planifie">Arrêt planifié</option>
+            <option value="prolongation">Prolongation</option>
+            <option value="mobilisation">Mobilisation</option>
+          </select>
           <label>Commentaire pour la décision<span class="required-star">*</span></label>
           <textarea id="comment-${d.id}" placeholder="Ajoutez un commentaire obligatoire avant validation"></textarea>
           <div class="row" style="margin-top: 12px;">
@@ -2605,7 +2613,13 @@
 
     async function valider(id, action) {
       const commentInput = document.getElementById(`comment-${id}`);
+      const motifInput = document.getElementById(`motif-${id}`);
       const commentaire = commentInput ? commentInput.value.trim() : "";
+      const motifValidation = motifInput ? motifInput.value : "";
+      if (action === "approuver" && !motifValidation) {
+        alert("Veuillez sélectionner un motif avant d'approuver la demande.");
+        return;
+      }
       if (!commentaire) {
         alert("Un commentaire est requis avant de confirmer une demande.");
         return;
@@ -2613,7 +2627,7 @@
       try {
         await appelApi(`/api/demandes/${id}/valider`, {
           method: "PUT",
-          body: JSON.stringify({ action, commentaire }),
+          body: JSON.stringify({ action, motif_validation: motifValidation || null, commentaire }),
         });
         chargerDemandesSuperviseur();
       } catch (e) {

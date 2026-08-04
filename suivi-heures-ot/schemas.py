@@ -9,6 +9,8 @@ from decimal import Decimal
 from typing import Any
 from pydantic import BaseModel, ConfigDict
 
+from models import MotifValidation
+
 
 # --------------------------------------------------------------------------- #
 # Authentification
@@ -97,6 +99,7 @@ class JourFerieReponse(BaseModel):
 
 class ValidationRequete(BaseModel):
     action: str  # "approuver" | "rejeter" | "retourner"
+    motif_validation: MotifValidation | None = None
     commentaire: str | None = None
     heures_travaillees_modifiees: Decimal | None = None
     heures_supplementaires_modifiees: Decimal | None = None

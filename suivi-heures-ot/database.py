@@ -148,6 +148,15 @@ def ensure_schema():
     if not inspector.has_table("mots_de_passe_oublies"):
         models.Base.metadata.create_all(bind=engine, tables=[models.MotDePasseOublie.__table__])
 
+    if not inspector.has_table("validations"):
+        models.Base.metadata.create_all(bind=engine, tables=[models.Validation.__table__])
+
+    if inspector.has_table("validations"):
+        validations_columns = {column["name"] for column in inspector.get_columns("validations")}
+        if "motif_validation" not in validations_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE validations ADD COLUMN motif_validation VARCHAR(30)"))
+
     if not inspector.has_table("plannings_shift"):
         models.Base.metadata.create_all(bind=engine, tables=[models.PlanningShift.__table__])
 
