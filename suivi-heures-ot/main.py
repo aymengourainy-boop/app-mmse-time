@@ -36,10 +36,12 @@ import models
 import schemas
 from auth import creer_token, decoder_token, verifier_mot_de_passe, hasher_mot_de_passe
 from database import SessionLocal, engine, ensure_schema, get_db, APP_DATA_DIR
+from seed import ensure_default_data
 from pathlib import Path
 
 # CrÃ©e les tables si elles n'existent pas encore (ne touche jamais aux donnÃ©es existantes)
 ensure_schema()
+ensure_default_data()
 UPLOADS_DIR = APP_DATA_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAROC_TZ = ZoneInfo("Africa/Casablanca")

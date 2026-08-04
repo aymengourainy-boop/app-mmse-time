@@ -12,13 +12,15 @@ pip install -r requirements.txt
 python seed.py
 ```
 
-Cela crée le fichier `suivi_heures.db` (base SQLite) avec 3 comptes :
+Cela crée le fichier `suivi_heures.db` (base SQLite) avec 5 comptes :
 
 | Rôle        | Matricule | Mot de passe |
 |-------------|-----------|--------------|
-| Technicien  | TECH001   | tech123      |
-| Superviseur | SUP001    | sup123       |
-| Admin       | ADMIN001  | admin123     |
+| Technicien        | TECH001   | tech123      |
+| Technicien SHIFT  | TECHS001  | shift123     |
+| Superviseur       | SUP001    | sup123       |
+| Superviseur SHIFT | SUPS001   | supshift123  |
+| Admin             | ADMIN001  | admin123     |
 
 ## Lancer l'application
 
