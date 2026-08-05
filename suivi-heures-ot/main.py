@@ -36,12 +36,64 @@ import models
 import schemas
 from auth import creer_token, decoder_token, verifier_mot_de_passe, hasher_mot_de_passe
 from database import SessionLocal, engine, ensure_schema, get_db, APP_DATA_DIR
-from seed import ensure_default_data
 from pathlib import Path
 
 # CrÃ©e les tables si elles n'existent pas encore (ne touche jamais aux donnÃ©es existantes)
 ensure_schema()
-ensure_default_data()
+
+# INITIALISATION DE LA BASE DE DONNEES
+db = SessionLocal()
+try:
+    user_count = db.query(models.Utilisateur).count()
+    force_reset = os.getenv("FORCE_RESET_DB", "false").lower() == "true"
+    if user_count == 0 or user_count < 5 or force_reset:
+        print("[INIT] Reinitialisation de la base...")
+        models.Base.metadata.drop_all(bind=engine)
+        models.Base.metadata.create_all(bind=engine)
+        
+        dept = models.Departement(code="MAINT", nom="Maintenance")
+        db.add(dept)
+        db.flush()
+        
+        equipe = models.Equipe(nom="Equipe A", shift="Jour", departement_id=dept.id)
+        db.add(equipe)
+        db.flush()
+        
+        admin = models.Utilisateur(matricule="ADMIN001", nom="Admin", prenom="Systeme",
+            email="admin@exemple.com", numero_telephone="0600000001",
+            mot_de_passe_hash=hasher_mot_de_passe("admin123"),
+            role=models.RoleUtilisateur.ADMINISTRATEUR, departement_id=dept.id, actif=True)
+        sup = models.Utilisateur(matricule="SUP001", nom="Bernard", prenom="Marie",
+            email="marie.bernard@exemple.com", numero_telephone="0600000002",
+            mot_de_passe_hash=hasher_mot_de_passe("sup123"),
+            role=models.RoleUtilisateur.SUPERVISEUR, departement_id=dept.id, equipe_id=equipe.id, actif=True)
+        sup_shift = models.Utilisateur(matricule="SUPS001", nom="Shift", prenom="Sarah",
+            email="sarah.shift@exemple.com", numero_telephone="0600000005",
+            mot_de_passe_hash=hasher_mot_de_passe("sups123"),
+            role=models.RoleUtilisateur.SUPERVISEUR_SHIFT, departement_id=dept.id, equipe_id=equipe.id, actif=True)
+        db.add_all([admin, sup, sup_shift])
+        db.flush()
+        
+        tech = models.Utilisateur(matricule="TECH001", nom="Dupont", prenom="Jean",
+            email="jean.dupont@exemple.com", numero_telephone="0600000003",
+            mot_de_passe_hash=hasher_mot_de_passe("tech123"),
+            role=models.RoleUtilisateur.TECHNICIEN, departement_id=dept.id, equipe_id=equipe.id, superviseur_id=sup.id, actif=True)
+        tech_shift = models.Utilisateur(matricule="TECHS001", nom="Shift", prenom="Hamid",
+            email="hamid.shift@exemple.com", numero_telephone="0600000004",
+            mot_de_passe_hash=hasher_mot_de_passe("shift123"),
+            role=models.RoleUtilisateur.TECHNICIEN_SHIFT, departement_id=dept.id, equipe_id=equipe.id, superviseur_id=sup.id, actif=True)
+        db.add_all([tech, tech_shift])
+        
+        reg = models.RegleHeuresSupplementaires(departement_id=dept.id, nom="Regle par defaut",
+            seuil_heures_normales_jour=8, seuil_heures_normales_semaine=40, taux_majoration_ot=1.5)
+        db.add(reg)
+        db.commit()
+        print("[INIT] OK - Comptes: ADMIN001, SUP001, SUPS001, TECH001, TECHS001")
+except Exception as e:
+    db.rollback()
+    print(f"[INIT ERREUR] {e}")
+finally:
+    db.close()
 UPLOADS_DIR = APP_DATA_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAROC_TZ = ZoneInfo("Africa/Casablanca")
@@ -58,6 +110,119 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Initialiser la base de donnees au demarrage
+@app.on_event("startup")
+async def startup_event():
+    """Initialise la base de donnees si necessaire au demarrage de l'application."""
+    db = SessionLocal()
+    try:
+        user_count = db.query(models.Utilisateur).count()
+        if user_count >= 5:
+            logger.info(f"[DB] Base de donnees valide: {user_count} utilisateurs trouves")
+            return
+        
+        logger.warning(f"[DB] Base de donnees incomplete ({user_count} utilisateurs), reinitialisation...")
+        
+        # Supprimer et recreer les tables
+        models.Base.metadata.drop_all(bind=engine)
+        models.Base.metadata.create_all(bind=engine)
+        
+        # Donnees de base
+        dept = models.Departement(code="MAINT", nom="Maintenance")
+        db.add(dept)
+        db.flush()
+        
+        equipe = models.Equipe(nom="Equipe A", shift="Jour", departement_id=dept.id)
+        db.add(equipe)
+        db.flush()
+        
+        # Creer les 5 comptes
+        admin = models.Utilisateur(
+            matricule="ADMIN001",
+            nom="Admin",
+            prenom="Systeme",
+            email="admin@exemple.com",
+            numero_telephone="0600000001",
+            mot_de_passe_hash=hasher_mot_de_passe("admin123"),
+            role=models.RoleUtilisateur.ADMINISTRATEUR,
+            departement_id=dept.id,
+            actif=True,
+        )
+        superviseur = models.Utilisateur(
+            matricule="SUP001",
+            nom="Bernard",
+            prenom="Marie",
+            email="marie.bernard@exemple.com",
+            numero_telephone="0600000002",
+            mot_de_passe_hash=hasher_mot_de_passe("sup123"),
+            role=models.RoleUtilisateur.SUPERVISEUR,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            actif=True,
+        )
+        superviseur_shift = models.Utilisateur(
+            matricule="SUPS001",
+            nom="Shift",
+            prenom="Sarah",
+            email="sarah.shift@exemple.com",
+            numero_telephone="0600000005",
+            mot_de_passe_hash=hasher_mot_de_passe("sups123"),
+            role=models.RoleUtilisateur.SUPERVISEUR_SHIFT,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            actif=True,
+        )
+        db.add_all([admin, superviseur, superviseur_shift])
+        db.flush()
+        
+        technicien = models.Utilisateur(
+            matricule="TECH001",
+            nom="Dupont",
+            prenom="Jean",
+            email="jean.dupont@exemple.com",
+            numero_telephone="0600000003",
+            mot_de_passe_hash=hasher_mot_de_passe("tech123"),
+            role=models.RoleUtilisateur.TECHNICIEN,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            superviseur_id=superviseur.id,
+            actif=True,
+        )
+        technicien_shift = models.Utilisateur(
+            matricule="TECHS001",
+            nom="Shift",
+            prenom="Hamid",
+            email="hamid.shift@exemple.com",
+            numero_telephone="0600000004",
+            mot_de_passe_hash=hasher_mot_de_passe("shift123"),
+            role=models.RoleUtilisateur.TECHNICIEN_SHIFT,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            superviseur_id=superviseur.id,
+            actif=True,
+        )
+        db.add_all([technicien, technicien_shift])
+        
+        reg = models.RegleHeuresSupplementaires(
+            departement_id=dept.id,
+            nom="Regle par defaut - Maintenance",
+            seuil_heures_normales_jour=8,
+            seuil_heures_normales_semaine=40,
+            taux_majoration_ot=1.5,
+        )
+        db.add(reg)
+        
+        db.commit()
+        logger.info("[DB] Base de donnees reinitialisee avec succes!")
+        logger.info("Comptes crees: ADMIN001, SUP001, SUPS001, TECH001, TECHS001")
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[DB] Erreur lors de l'initialisation: {e}", exc_info=True)
+    finally:
+        db.close()
 
 
 # --------------------------------------------------------------------------- #
@@ -1747,3 +1912,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     reload_mode = os.environ.get("RELOAD", "0") == "1" and not os.environ.get("WEBSITE_SITE_NAME")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
+
+
