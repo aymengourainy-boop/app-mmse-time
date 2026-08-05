@@ -58,6 +58,119 @@ app.add_middleware(
 )
 
 
+# Initialiser la base de donnees au demarrage
+@app.on_event("startup")
+async def startup_event():
+    """Initialise la base de donnees si necessaire au demarrage de l'application."""
+    db = SessionLocal()
+    try:
+        user_count = db.query(models.Utilisateur).count()
+        if user_count >= 5:
+            logger.info(f"[DB] Base de donnees valide: {user_count} utilisateurs trouves")
+            return
+        
+        logger.warning(f"[DB] Base de donnees incomplete ({user_count} utilisateurs), reinitialisation...")
+        
+        # Supprimer et recreer les tables
+        models.Base.metadata.drop_all(bind=engine)
+        models.Base.metadata.create_all(bind=engine)
+        
+        # Donnees de base
+        dept = models.Departement(code="MAINT", nom="Maintenance")
+        db.add(dept)
+        db.flush()
+        
+        equipe = models.Equipe(nom="Equipe A", shift="Jour", departement_id=dept.id)
+        db.add(equipe)
+        db.flush()
+        
+        # Creer les 5 comptes
+        admin = models.Utilisateur(
+            matricule="ADMIN001",
+            nom="Admin",
+            prenom="Systeme",
+            email="admin@exemple.com",
+            numero_telephone="0600000001",
+            mot_de_passe_hash=hasher_mot_de_passe("admin123"),
+            role=models.RoleUtilisateur.ADMINISTRATEUR,
+            departement_id=dept.id,
+            actif=True,
+        )
+        superviseur = models.Utilisateur(
+            matricule="SUP001",
+            nom="Bernard",
+            prenom="Marie",
+            email="marie.bernard@exemple.com",
+            numero_telephone="0600000002",
+            mot_de_passe_hash=hasher_mot_de_passe("sup123"),
+            role=models.RoleUtilisateur.SUPERVISEUR,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            actif=True,
+        )
+        superviseur_shift = models.Utilisateur(
+            matricule="SUPS001",
+            nom="Shift",
+            prenom="Sarah",
+            email="sarah.shift@exemple.com",
+            numero_telephone="0600000005",
+            mot_de_passe_hash=hasher_mot_de_passe("sups123"),
+            role=models.RoleUtilisateur.SUPERVISEUR_SHIFT,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            actif=True,
+        )
+        db.add_all([admin, superviseur, superviseur_shift])
+        db.flush()
+        
+        technicien = models.Utilisateur(
+            matricule="TECH001",
+            nom="Dupont",
+            prenom="Jean",
+            email="jean.dupont@exemple.com",
+            numero_telephone="0600000003",
+            mot_de_passe_hash=hasher_mot_de_passe("tech123"),
+            role=models.RoleUtilisateur.TECHNICIEN,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            superviseur_id=superviseur.id,
+            actif=True,
+        )
+        technicien_shift = models.Utilisateur(
+            matricule="TECHS001",
+            nom="Shift",
+            prenom="Hamid",
+            email="hamid.shift@exemple.com",
+            numero_telephone="0600000004",
+            mot_de_passe_hash=hasher_mot_de_passe("shift123"),
+            role=models.RoleUtilisateur.TECHNICIEN_SHIFT,
+            departement_id=dept.id,
+            equipe_id=equipe.id,
+            superviseur_id=superviseur.id,
+            actif=True,
+        )
+        db.add_all([technicien, technicien_shift])
+        
+        reg = models.RegleHeuresSupplementaires(
+            departement_id=dept.id,
+            nom="Regle par defaut - Maintenance",
+            seuil_heures_normales_jour=8,
+            seuil_heures_normales_semaine=40,
+            taux_majoration_ot=1.5,
+        )
+        db.add(reg)
+        
+        db.commit()
+        logger.info("[DB] Base de donnees reinitialisee avec succes!")
+        logger.info("Comptes crees: ADMIN001, SUP001, SUPS001, TECH001, TECHS001")
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[DB] Erreur lors de l'initialisation: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
 # --------------------------------------------------------------------------- #
 # GÃ©olocalisation basÃ©e sur l'IP
 # --------------------------------------------------------------------------- #
