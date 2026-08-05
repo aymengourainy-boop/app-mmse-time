@@ -47,7 +47,18 @@ else:
         departement_id=dept.id,
         equipe_id=equipe.id,
     )
-    db.add_all([admin, superviseur])
+    superviseur_shift = models.Utilisateur(
+        matricule="SUPS001",
+        nom="Shift",
+        prenom="Sarah",
+        email="sarah.shift@exemple.com",
+        numero_telephone="0600000005",
+        mot_de_passe_hash=hasher_mot_de_passe("sups123"),
+        role=models.RoleUtilisateur.SUPERVISEUR_SHIFT,
+        departement_id=dept.id,
+        equipe_id=equipe.id,
+    )
+    db.add_all([admin, superviseur, superviseur_shift])
     db.flush()
 
     technicien = models.Utilisateur(
@@ -87,9 +98,10 @@ else:
 
     db.commit()
     print("[OK] Test data created:")
-    print("   Admin       -> matricule: ADMIN001  / password: admin123")
-    print("   Supervisor  -> matricule: SUP001    / password: sup123")
-    print("   Technician  -> matricule: TECH001   / password: tech123")
-    print("   Shift tech   -> matricule: TECHS001  / password: shift123")
+    print("   Admin              -> matricule: ADMIN001  / password: admin123")
+    print("   Supervisor         -> matricule: SUP001    / password: sup123")
+    print("   Supervisor Shift   -> matricule: SUPS001   / password: sups123")
+    print("   Technician         -> matricule: TECH001   / password: tech123")
+    print("   Shift Technician   -> matricule: TECHS001  / password: shift123")
 
 db.close()
