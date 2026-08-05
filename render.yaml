@@ -3,7 +3,7 @@ services:
     name: app-mmse-time
     env: python
     plan: free
-    buildCommand: cd suivi-heures-ot && pip install -r requirements.txt
+    buildCommand: pip install -r suivi-heures-ot/requirements.txt
     startCommand: bash start.sh
     autoDeploy: true
     disk:
