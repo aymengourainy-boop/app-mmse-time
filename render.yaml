@@ -15,3 +15,5 @@ services:
         value: /var/data
       - key: RENDER
         value: "true"
+      - key: FORCE_RESET_DB
+        value: "true"

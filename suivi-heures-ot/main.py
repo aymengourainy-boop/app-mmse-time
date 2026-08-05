@@ -45,7 +45,8 @@ ensure_schema()
 db = SessionLocal()
 try:
     user_count = db.query(models.Utilisateur).count()
-    if user_count < 5:
+    force_reset = os.getenv("FORCE_RESET_DB", "false").lower() == "true"
+    if user_count < 5 or force_reset:
         print("[INIT] Reinitialisation de la base...")
         models.Base.metadata.drop_all(bind=engine)
         models.Base.metadata.create_all(bind=engine)
