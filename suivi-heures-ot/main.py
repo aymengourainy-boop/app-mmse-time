@@ -46,7 +46,7 @@ db = SessionLocal()
 try:
     user_count = db.query(models.Utilisateur).count()
     force_reset = os.getenv("FORCE_RESET_DB", "false").lower() == "true"
-    if user_count < 5 or force_reset:
+    if user_count == 0 or user_count < 5 or force_reset:
         print("[INIT] Reinitialisation de la base...")
         models.Base.metadata.drop_all(bind=engine)
         models.Base.metadata.create_all(bind=engine)
@@ -1912,3 +1912,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     reload_mode = os.environ.get("RELOAD", "0") == "1" and not os.environ.get("WEBSITE_SITE_NAME")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
+
