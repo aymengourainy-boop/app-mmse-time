@@ -27,14 +27,15 @@ def _get_app_data_dir() -> Path:
     if app_data_dir:
         candidates.append(Path(app_data_dir).expanduser().resolve())
 
+    if os.environ.get("RENDER"):
+        candidates.append(Path("/var/data"))
+
     if os.environ.get("WEBSITE_SITE_NAME"):
         candidates.append(Path("/home/site/data"))
 
-    # Use current directory if using external database (no persistent disk needed)
     if os.environ.get("DATABASE_URL"):
         candidates.append(Path(".").resolve())
 
-    # Always try temp directory as fallback
     candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
     candidates.append(Path(".").resolve())
 
@@ -52,6 +53,10 @@ def _get_app_data_dir() -> Path:
         logger.warning("Repertoire de donnees non inscriptible: %s", candidate)
 
     raise RuntimeError("Aucun repertoire de stockage accessible n'a pu etre prepare")
+
+
+APP_DATA_DIR = _get_app_data_dir()
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 APP_DATA_DIR = _get_app_data_dir()

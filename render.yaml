@@ -6,10 +6,14 @@ services:
     buildCommand: pip install -r suivi-heures-ot/requirements.txt
     startCommand: cd suivi-heures-ot && python main.py
     autoDeploy: true
+    disk:
+      name: app-mmse-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
+      - key: APP_DATA_DIR
+        value: /var/data
       - key: RENDER
         value: "true"
       - key: FORCE_RESET_DB
-        value: "false"
-      - key: RENDER_DEPLOY_VERSION
-        value: "2"
+        value: "true"
