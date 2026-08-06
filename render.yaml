@@ -6,6 +6,10 @@ services:
     buildCommand: pip install -r suivi-heures-ot/requirements.txt
     startCommand: bash start.sh
     autoDeploy: true
+    disk:
+      name: app-mmse-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: RENDER
         value: "true"
