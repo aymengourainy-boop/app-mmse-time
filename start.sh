@@ -1,17 +1,14 @@
 #!/bin/bash
 # Script de démarrage pour Render
-# Initialise la base de données puis démarre l'application
+# Démarre l'application avec Uvicorn en bindant le port correctement
 
 set -e
 
-echo "[STARTUP] PWD: $(pwd)"
-echo "[STARTUP] LS:"
-ls -la
-
-echo "[STARTUP] Initialisation de la base de donnees..."
+echo "[STARTUP] Démarrage de l'application avec Uvicorn..."
 cd suivi-heures-ot
-python init_db.py
 
-echo "[STARTUP] Demarrage de l'application..."
-python main.py
+# Utiliser la variable PORT de Render, sinon 8000 par défaut
+PORT=${PORT:-8000}
+echo "[STARTUP] Binding to port $PORT"
 
+uvicorn main:app --host 0.0.0.0 --port $PORT
