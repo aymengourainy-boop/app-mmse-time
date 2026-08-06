@@ -27,7 +27,8 @@ def _get_app_data_dir() -> Path:
     if app_data_dir:
         candidates.append(Path(app_data_dir).expanduser().resolve())
 
-    if os.environ.get("RENDER"):
+    if os.environ.get("RENDER") and app_data_dir:
+        # Only add /var/data if APP_DATA_DIR was explicitly set
         candidates.append(Path("/var/data"))
 
     if os.environ.get("WEBSITE_SITE_NAME"):
@@ -47,6 +48,7 @@ def _get_app_data_dir() -> Path:
             continue
 
         if os.access(candidate, os.W_OK | os.X_OK):
+            logger.info("Repertoire de donnees utilise: %s", candidate)
             return candidate
 
         logger.warning("Repertoire de donnees non inscriptible: %s", candidate)
