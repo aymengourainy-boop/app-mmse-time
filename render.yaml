@@ -11,3 +11,5 @@ services:
         value: "true"
       - key: FORCE_RESET_DB
         value: "false"
+      - key: RENDER_DEPLOY_VERSION
+        value: "2"
