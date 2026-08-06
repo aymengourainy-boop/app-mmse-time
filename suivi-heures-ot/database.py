@@ -59,11 +59,16 @@ def default_database_url() -> str:
 
 
 DATABASE_URL = default_database_url()
+logger.info("Using DATABASE_URL: %s", DATABASE_URL[:50] if DATABASE_URL else "None")
 
 # connect_args nécessaire uniquement pour SQLite (pas pour PostgreSQL)
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+try:
+    engine = create_engine(DATABASE_URL, connect_args=connect_args)
+except Exception as e:
+    logger.error("Failed to create database engine with URL %s: %s", DATABASE_URL, e)
+    raise
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
