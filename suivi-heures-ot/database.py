@@ -55,7 +55,6 @@ def _get_app_data_dir() -> Path:
 
 
 APP_DATA_DIR = _get_app_data_dir()
-APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def default_database_url() -> str:
