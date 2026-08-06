@@ -133,12 +133,12 @@ def ensure_schema():
                 conn.execute(
                     text(
                         "INSERT INTO jours_feries (date, nom, est_musulman, actif, comptabilise_pour_techniciens_normaux, description) VALUES "
-                        "(:d1, :n1, 0, 1, 1, :desc1), "
-                        "(:d2, :n2, 0, 1, 1, :desc2), "
-                        "(:d3, :n3, 0, 1, 1, :desc3), "
-                        "(:d4, :n4, 0, 1, 1, :desc4), "
-                        "(:d5, :n5, 0, 1, 1, :desc5), "
-                        "(:d6, :n6, 0, 1, 1, :desc6)"
+                        "(:d1, :n1, false, true, true, :desc1), "
+                        "(:d2, :n2, false, true, true, :desc2), "
+                        "(:d3, :n3, false, true, true, :desc3), "
+                        "(:d4, :n4, false, true, true, :desc4), "
+                        "(:d5, :n5, false, true, true, :desc5), "
+                        "(:d6, :n6, false, true, true, :desc6)"
                     ),
                     {
                         "d1": f"{current_year}-01-01",
