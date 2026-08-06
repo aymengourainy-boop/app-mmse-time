@@ -20,44 +20,28 @@ import models
 logger = logging.getLogger(__name__)
 
 def _get_app_data_dir() -> Path:
-    """Détermine le répertoire de stockage des données en fonction de l'environnement."""
+    """Détermine le répertoire de stockage des données pour les fichiers uploadés."""
     candidates: list[Path] = []
 
     app_data_dir = os.environ.get("APP_DATA_DIR")
     if app_data_dir:
         candidates.append(Path(app_data_dir).expanduser().resolve())
 
-    if os.environ.get("WEBSITE_SITE_NAME"):
-        candidates.append(Path("/home/site/data"))
-
-    # Si DATABASE_URL est défini (PostgreSQL externe), utiliser répertoires temporaires
-    if os.environ.get("DATABASE_URL"):
-        candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
-        candidates.append(Path(".").resolve())
-    else:
-        # Sinon sur Render avec disque local
-        if os.environ.get("RENDER"):
-            candidates.append(Path("/var/data"))
-        candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
-        candidates.append(Path(".").resolve())
+    # Préférer le répertoire temporaire, puis le répertoire courant
+    candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
+    candidates.append(Path(".").resolve())
 
     for candidate in candidates:
         try:
             candidate.mkdir(parents=True, exist_ok=True)
+            if os.access(candidate, os.W_OK | os.X_OK):
+                logger.info("Repertoire de donnees utilise: %s", candidate)
+                return candidate
         except OSError as exc:
             logger.warning("Impossible de preparer le repertoire de donnees %s: %s", candidate, exc)
             continue
 
-        if os.access(candidate, os.W_OK | os.X_OK):
-            logger.info("Repertoire de donnees utilise: %s", candidate)
-            return candidate
-
-        logger.warning("Repertoire de donnees non inscriptible: %s", candidate)
-
     raise RuntimeError("Aucun repertoire de stockage accessible n'a pu etre prepare")
-
-
-APP_DATA_DIR = _get_app_data_dir()
 
 
 APP_DATA_DIR = _get_app_data_dir()
