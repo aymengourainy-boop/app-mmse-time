@@ -60,6 +60,7 @@ class DemandeCreation(BaseModel):
     heures_normales_par_jour: dict[str, float | None] | None = None
     heures_supplementaires_par_jour: dict[str, float | None] | None = None
     conges_par_jour: dict[str, bool | None] | None = None
+    recuperation_par_jour: dict[str, bool | None] | None = None
     soumettre: bool = False  # False = brouillon, True = envoi direct au superviseur
     localisation: dict[str, Any] | None = None  # {"ville": "Rabat", "pays": "Maroc", "ip": "..."}
 
@@ -130,6 +131,8 @@ class DemandeReponse(BaseModel):
     heures_normales_par_jour: dict[str, float | None] | None = None
     heures_supplementaires_par_jour: dict[str, float | None] | None = None
     conges_par_jour: dict[str, bool | None] | None = None
+    recuperation_par_jour: dict[str, bool | None] | None = None
+    est_conge_recuperation: bool = False
     localisation: dict[str, Any] | str | None = None
     statut: str
     cree_le: datetime

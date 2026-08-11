@@ -324,6 +324,7 @@ class Demande(Base, TimestampMixin):
     heures_normales_par_jour: Mapped[dict | None] = mapped_column(JSONVariant)
     heures_supplementaires_par_jour: Mapped[dict | None] = mapped_column(JSONVariant)
     conges_par_jour: Mapped[dict | None] = mapped_column(JSONVariant)
+    recuperation_par_jour: Mapped[dict | None] = mapped_column(JSONVariant)
     regle_ot_appliquee_id: Mapped[int | None] = mapped_column(
         ForeignKey("regles_heures_supplementaires.id")
     )  # traçabilité : quelle règle a servi au calcul
@@ -379,6 +380,16 @@ class Demande(Base, TimestampMixin):
     @property
     def technicien_nom(self) -> str | None:
         return self.technicien.nom if self.technicien else None
+
+    @property
+    def est_conge_recuperation(self) -> bool:
+        """True si la demande ne contient que des jours de congé/récupération
+        (aucune heure normale ni supplémentaire) : validation simplifiée."""
+        if self.heures_travaillees and self.heures_travaillees > 0:
+            return False
+        a_conge = any(bool(v) for v in (self.conges_par_jour or {}).values())
+        a_recuperation = any(bool(v) for v in (self.recuperation_par_jour or {}).values())
+        return a_conge or a_recuperation
     historique: Mapped[list["HistoriqueDemande"]] = relationship(
         back_populates="demande", cascade="all, delete-orphan"
     )

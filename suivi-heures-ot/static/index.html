@@ -1007,6 +1007,16 @@
       return true;
     }
 
+    function libelleAbsence(d) {
+      const conges = d.conges_par_jour || {};
+      const recuperations = d.recuperation_par_jour || {};
+      const aConge = Object.values(conges).some((v) => v === true);
+      const aRecuperation = Object.values(recuperations).some((v) => v === true);
+      if (aConge && aRecuperation) return "Demande de congé / récupération";
+      if (aRecuperation) return "Demande de récupération";
+      return "Demande de congé";
+    }
+
     function renderCarteDemandeSuperviseur(d, peutAgir = true) {
       const normales = Object.values(d.heures_normales_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
       const supp = Object.values(d.heures_supplementaires_par_jour || {}).filter(v => v !== null && v !== undefined).reduce((a, b) => a + Number(b), 0);
@@ -1061,6 +1071,12 @@
             ${badgeStatut(d.statut)}
           </div>
           <div class="request-meta" style="margin-top:8px;">Détails des travaux : ${escapeHtml(d.description_travaux || "—")}</div>
+          ${d.est_conge_recuperation ? `
+          <div class="request-meta" style="margin-top:8px; font-weight:700; color:var(--accent);">${libelleAbsence(d)}</div>
+          <div class="row" style="margin-top: 12px;">
+            <button class="btn-success" onclick="valider(${d.id}, 'approuver')">Approuver</button>
+          </div>
+          ` : `
           <label>Motif de validation<span class="required-star">*</span></label>
           <select id="motif-${d.id}">
             <option value="">Sélectionner un motif</option>
@@ -1076,6 +1092,7 @@
             <button class="btn-warning" onclick="valider(${d.id}, 'retourner')">Retour pour modification</button>
             <button class="btn-danger" onclick="valider(${d.id}, 'rejeter')">Rejeter</button>
           </div>
+          `}
         </div>
       `;
     }
@@ -1210,6 +1227,7 @@
             <th style="padding:8px;">Heures supplémentaires</th>
             <th style="padding:8px;">Majoration</th>
             <th style="padding:8px;">Congé</th>
+            <th style="padding:8px;">Récupération</th>
           </tr>
         </thead>
         <tbody id="weekBody"></tbody>
@@ -1233,6 +1251,7 @@
           <td style="padding:6px;"><input type="text" id="supp_${jour}" readonly style="background:transparent; border:none; color:var(--muted); font-weight:700;" value="" /></td>
           <td style="padding:6px; min-width:120px;"><div id="suppInfo_${jour}" style="font-size:12px; color:var(--muted); min-height:1.4em;"></div></td>
           <td style="padding:6px; text-align:center;"><input type="checkbox" id="conge_${jour}" disabled/></td>
+          <td style="padding:6px; text-align:center;"><input type="checkbox" id="recuperation_${jour}" disabled/></td>
         `;
         body.appendChild(tr);
 
@@ -1245,6 +1264,17 @@
             document.getElementById(`end_${jour}`).value = '';
             document.getElementById(`total_${jour}`).value = '0.00';
             document.getElementById(`supp_${jour}`).value = '';
+            document.getElementById(`recuperation_${jour}`).checked = false;
+          }
+          actualiserTotaux();
+        });
+        document.getElementById(`recuperation_${jour}`).addEventListener('change', () => {
+          if (document.getElementById(`recuperation_${jour}`).checked) {
+            document.getElementById(`start_${jour}`).value = '';
+            document.getElementById(`end_${jour}`).value = '';
+            document.getElementById(`total_${jour}`).value = '0.00';
+            document.getElementById(`supp_${jour}`).value = '';
+            document.getElementById(`conge_${jour}`).checked = false;
           }
           actualiserTotaux();
         });
@@ -1294,7 +1324,7 @@
 
         // Par défaut : désactiver tous les champs — on active ensuite selon rôle
         JOURS.forEach((jour) => {
-          ['start_', 'end_', 'supp_', 'conge_'].forEach((prefix) => {
+          ['start_', 'end_', 'supp_', 'conge_', 'recuperation_'].forEach((prefix) => {
             const el = document.getElementById(prefix + jour);
             if (!el) return;
             el.disabled = true;
@@ -1304,7 +1334,7 @@
 
         // Helper pour activer/unlock
         const setEnabled = (jour, enabled) => {
-          ['start_', 'end_', 'supp_', 'conge_'].forEach((prefix) => {
+          ['start_', 'end_', 'supp_', 'conge_', 'recuperation_'].forEach((prefix) => {
             const el = document.getElementById(prefix + jour);
             if (!el) return;
             el.disabled = !enabled;
@@ -1653,6 +1683,7 @@
       const normalData = donnees?.heures_normales_par_jour || {};
       const suppData = donnees?.heures_supplementaires_par_jour || {};
       const congeData = donnees?.conges_par_jour || {};
+      const recuperationData = donnees?.recuperation_par_jour || {};
       joursAffiches.forEach((jour) => {
         const normales = normalData[jour] ?? null;
         const supp = suppData[jour] ?? null;
@@ -1661,6 +1692,7 @@
         const suppEl = document.getElementById(`supp_${jour}`);
         const suppInfoEl = document.getElementById(`suppInfo_${jour}`);
         const congeEl = document.getElementById(`conge_${jour}`);
+        const recuperationEl = document.getElementById(`recuperation_${jour}`);
         if (totalEl) totalEl.value = total.toFixed(2);
         if (suppEl) suppEl.value = supp ?? '';
         if (suppInfoEl) {
@@ -1674,6 +1706,7 @@
           }
         }
         if (congeEl) congeEl.checked = Boolean(congeData[jour]);
+        if (recuperationEl) recuperationEl.checked = Boolean(recuperationData[jour]);
       });
       actualiserTotaux();
     }
@@ -1682,19 +1715,22 @@
       const normals = {};
       const supps = {};
       const conges = {};
+      const recuperations = {};
       const role = utilisateurCourant ? utilisateurCourant.role : "";
       joursAffiches.forEach((jour) => {
         const totalValue = Number(document.getElementById(`total_${jour}`)?.value || 0);
         const congeValue = document.getElementById(`conge_${jour}`).checked;
+        const recuperationValue = document.getElementById(`recuperation_${jour}`).checked;
         const date = semaineDates[jour];
         const estFerie = isJourFerie(date);
         const estWeekend = isWeekend(date);
         const comptabilise = estJourFerieComptabilisePourRole(date);
 
-        if (congeValue || totalValue === 0) {
+        if (congeValue || recuperationValue || totalValue === 0) {
           normals[jour] = null;
           supps[jour] = null;
           conges[jour] = congeValue;
+          recuperations[jour] = recuperationValue;
           return;
         }
 
@@ -1702,6 +1738,7 @@
           normals[jour] = null;
           supps[jour] = null;
           conges[jour] = congeValue;
+          recuperations[jour] = recuperationValue;
           return;
         }
 
@@ -1714,14 +1751,16 @@
           supps[jour] = Number(Math.max(0, totalValue - normale).toFixed(2));
         }
         conges[jour] = congeValue;
+        recuperations[jour] = recuperationValue;
       });
-      return { normals, supps, conges };
+      return { normals, supps, conges, recuperations };
     }
 
     function semaineContientDesDonnees(semaine) {
       return Object.values(semaine.normals).some((v) => v !== null) ||
         Object.values(semaine.supps).some((v) => v !== null) ||
-        Object.values(semaine.conges).some((v) => v === true);
+        Object.values(semaine.conges).some((v) => v === true) ||
+        Object.values(semaine.recuperations).some((v) => v === true);
     }
 
     function resetForm() {
@@ -1741,6 +1780,7 @@
         const totalEl = document.getElementById(`total_${jour}`);
         const suppEl = document.getElementById(`supp_${jour}`);
         const congeEl = document.getElementById(`conge_${jour}`);
+        const recuperationEl = document.getElementById(`recuperation_${jour}`);
         if (startEl) startEl.value = '';
         if (endEl) endEl.value = '';
         if (totalEl) totalEl.value = '0.00';
@@ -1749,6 +1789,7 @@
           document.getElementById(`suppInfo_${jour}`).textContent = '';
         }
         if (congeEl) congeEl.checked = false;
+        if (recuperationEl) recuperationEl.checked = false;
       });
       const periodeLabel = document.getElementById('periodeSemaine');
       if (periodeLabel) {
@@ -1782,6 +1823,7 @@
           champs.push(`start_${jour}`);
           champs.push(`end_${jour}`);
           champs.push(`conge_${jour}`);
+          champs.push(`recuperation_${jour}`);
         });
         champs.forEach((id) => {
           const el = document.getElementById(id);
@@ -1802,6 +1844,7 @@
         ids.push(`start_${jour}`);
         ids.push(`end_${jour}`);
         ids.push(`conge_${jour}`);
+        ids.push(`recuperation_${jour}`);
       });
       ids.forEach((id) => {
         const el = document.getElementById(id);
@@ -2002,6 +2045,7 @@
           heures_normales_par_jour: etat.semaine.normals,
           heures_supplementaires_par_jour: etat.semaine.supps,
           conges_par_jour: etat.semaine.conges,
+          recuperation_par_jour: etat.semaine.recuperations,
         });
       }
       actualiserTotaux();
@@ -2271,12 +2315,14 @@
       const normals = demande?.heures_normales_par_jour || {};
       const supps = demande?.heures_supplementaires_par_jour || {};
       const conges = demande?.conges_par_jour || {};
+      const recuperations = demande?.recuperation_par_jour || {};
       const joursEnvoyes = JOURS.filter((jour) => {
         const normal = normals[jour];
         const supp = supps[jour];
         const conge = conges[jour];
+        const recuperation = recuperations[jour];
         const total = (normal ? Number(normal) : 0) + (supp ? Number(supp) : 0);
-        return conge || total > 0;
+        return conge || recuperation || total > 0;
       });
       if (!joursEnvoyes.length) {
         return `<div class="request-meta" style="margin-top:12px;">
@@ -2293,6 +2339,7 @@
               <div>Heures normales : <b>${formatHeures(normals[jour])}</b></div>
               <div>Heures supp. : <b>${formatHeures(supps[jour])}</b></div>
               <div>Congé : <b>${conges[jour] ? "Oui" : "Non"}</b></div>
+              <div>Récupération : <b>${recuperations[jour] ? "Oui" : "Non"}</b></div>
             </div>
           `).join("")}
         </div>
@@ -2324,7 +2371,7 @@
         return;
       }
 
-      const { normals, supps, conges } = semaine;
+      const { normals, supps, conges, recuperations } = semaine;
       const fichiersInput = document.getElementById("champFichiers");
       const fichiers = fichiersInput ? fichiersInput.files : [];
 
@@ -2346,6 +2393,7 @@
       formData.append("heures_normales_par_jour", JSON.stringify(normals));
       formData.append("heures_supplementaires_par_jour", JSON.stringify(supps));
       formData.append("conges_par_jour", JSON.stringify(conges));
+      formData.append("recuperation_par_jour", JSON.stringify(recuperations));
       formData.append("soumettre", soumettre ? "true" : "false");
       
       const localisation = await obtenirLocalisationPourDemande();
@@ -2368,6 +2416,7 @@
             heures_normales_par_jour: normals,
             heures_supplementaires_par_jour: supps,
             conges_par_jour: conges,
+            recuperation_par_jour: recuperations,
             localisation,
             soumettre,
           }) });
@@ -2606,11 +2655,11 @@
       const motifInput = document.getElementById(`motif-${id}`);
       const commentaire = commentInput ? commentInput.value.trim() : "";
       const motifValidation = motifInput ? motifInput.value : "";
-      if (action === "approuver" && !motifValidation) {
+      if (motifInput && action === "approuver" && !motifValidation) {
         alert("Veuillez sélectionner un motif avant d'approuver la demande.");
         return;
       }
-      if (!commentaire) {
+      if (commentInput && !commentaire) {
         alert("Un commentaire est requis avant de confirmer une demande.");
         return;
       }

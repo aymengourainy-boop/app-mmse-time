@@ -96,6 +96,9 @@ def ensure_schema():
     if "conges_par_jour" not in columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE demandes ADD COLUMN conges_par_jour JSON"))
+    if "recuperation_par_jour" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE demandes ADD COLUMN recuperation_par_jour JSON"))
     if "conge" not in columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE demandes ADD COLUMN conge BOOLEAN NOT NULL DEFAULT 0"))

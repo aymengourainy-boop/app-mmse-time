@@ -430,6 +430,7 @@ def payload_contient_jours_passes(
     supplementaires_par_jour: dict | None,
     conges_par_jour: dict | None,
     reference: date_type,
+    recuperation_par_jour: dict | None = None,
 ) -> bool:
     clefs = set()
     if normales_par_jour:
@@ -438,9 +439,11 @@ def payload_contient_jours_passes(
         clefs.update(supplementaires_par_jour.keys())
     if conges_par_jour:
         clefs.update(conges_par_jour.keys())
+    if recuperation_par_jour:
+        clefs.update(recuperation_par_jour.keys())
 
     for cle in clefs:
-        if not jour_a_du_contenu(normales_par_jour, supplementaires_par_jour, conges_par_jour, cle):
+        if not jour_a_du_contenu(normales_par_jour, supplementaires_par_jour, conges_par_jour, cle, recuperation_par_jour):
             continue
         date_jour = date_depuis_cle(cle, reference)
         if date_jour and date_jour < aujourdhui_maroc():
@@ -618,10 +621,12 @@ def jour_a_du_contenu(
     supplementaires_par_jour: dict | None,
     conges_par_jour: dict | None,
     cle: str,
+    recuperation_par_jour: dict | None = None,
 ) -> bool:
     normal_val = normales_par_jour.get(cle) if normales_par_jour else None
     supp_val = supplementaires_par_jour.get(cle) if supplementaires_par_jour else None
     conge_val = conges_par_jour.get(cle) if conges_par_jour else None
+    recuperation_val = recuperation_par_jour.get(cle) if recuperation_par_jour else None
 
     if normal_val is not None:
         try:
@@ -635,7 +640,7 @@ def jour_a_du_contenu(
                 return True
         except Exception:
             return True
-    if conge_val:
+    if conge_val or recuperation_val:
         return True
     return False
 
@@ -684,6 +689,7 @@ def calculer_heures_depuis_breakdown(
     db: Session,
     utilisateur: models.Utilisateur,
     reference: date_type,
+    recuperation_par_jour: dict | None = None,
 ):
     normales = Decimal("0.00")
     supplementaires = Decimal("0.00")
@@ -707,6 +713,8 @@ def calculer_heures_depuis_breakdown(
         if date_jour is None:
             continue
         if conges_par_jour and conges_par_jour.get(cle):
+            continue
+        if recuperation_par_jour and recuperation_par_jour.get(cle):
             continue
 
         normal_val = heures_normales_par_jour.get(cle) if heures_normales_par_jour else None
@@ -1008,6 +1016,7 @@ async def creer_demande(
     heures_normales_par_jour: str | None = Form(None),
     heures_supplementaires_par_jour: str | None = Form(None),
     conges_par_jour: str | None = Form(None),
+    recuperation_par_jour: str | None = Form(None),
     localisation_json: str | None = Form(None),
     fichiers: list[UploadFile] | None = File(None),
     utilisateur: models.Utilisateur = Depends(get_utilisateur),
@@ -1037,6 +1046,7 @@ async def creer_demande(
     normales_dict = normaliser_heures_par_jour(parse_json_field(heures_normales_par_jour))
     supps_dict = normaliser_heures_par_jour(parse_json_field(heures_supplementaires_par_jour))
     conges_dict = normaliser_conges_par_jour(parse_json_field(conges_par_jour))
+    recuperation_dict = normaliser_conges_par_jour(parse_json_field(recuperation_par_jour))
 
     def trouver_date_dans_demande(cle: str) -> date_type | None:
         return date_depuis_cle(cle, date_demande)
@@ -1059,24 +1069,24 @@ async def creer_demande(
 
     if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
         if not peut_saisir_weekend(utilisateur):
-            for cle in set((normales_dict or {}).keys()) | set((supps_dict or {}).keys()) | set((conges_dict or {}).keys()):
-                if not jour_a_du_contenu(normales_dict, supps_dict, conges_dict, cle):
+            for cle in set((normales_dict or {}).keys()) | set((supps_dict or {}).keys()) | set((conges_dict or {}).keys()) | set((recuperation_dict or {}).keys()):
+                if not jour_a_du_contenu(normales_dict, supps_dict, conges_dict, cle, recuperation_dict):
                     continue
                 date_jour = trouver_date_dans_demande(cle)
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisÃ©e pour votre rÃ´le")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if payload_contient_jours_passes(normales_dict, supps_dict, conges_dict, date_demande) and not peut_saisir_jours_passes(utilisateur):
+        if payload_contient_jours_passes(normales_dict, supps_dict, conges_dict, date_demande, recuperation_dict) and not peut_saisir_jours_passes(utilisateur):
             raise HTTPException(status_code=403, detail="La saisie des jours passÃ©s nÃ©cessite l'autorisation d'un administrateur")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
+        if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant, recuperation_dict):
             if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens Shift ne peuvent saisir que la date du jour")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
-        if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant):
+        if jour_a_du_contenu(normales_dict, supps_dict, conges_dict, jour_courant, recuperation_dict):
             if date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
             if est_weekend(date_demande) and not peut_saisir_weekend(utilisateur):
@@ -1085,7 +1095,7 @@ async def creer_demande(
     regle = trouver_regle_ot(db, utilisateur.departement_id, date_demande)
 
     # Calcule le total / normales / supp Ã  partir du breakdown envoyÃ©
-    breakdown = calculer_heures_depuis_breakdown(normales_dict, supps_dict, conges_dict, db, utilisateur, date_demande)
+    breakdown = calculer_heures_depuis_breakdown(normales_dict, supps_dict, conges_dict, db, utilisateur, date_demande, recuperation_dict)
     if breakdown is None:
         total, normales, supp = Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
     else:
@@ -1121,6 +1131,7 @@ async def creer_demande(
         heures_normales_par_jour=normales_dict,
         heures_supplementaires_par_jour=supps_dict,
         conges_par_jour=conges_dict,
+        recuperation_par_jour=recuperation_dict,
         regle_ot_appliquee_id=regle.id if regle else None,
         equipement=equipement,
         ordre_travail_sap=ordre_travail_sap,
@@ -1282,6 +1293,7 @@ def exporter_demandes(
         "Heures normales par jour",
         "Heures supplementaires par jour",
         "Conges par jour",
+        "Recuperation par jour",
         "Regle OT appliquee",
         "Description travaux",
         "Justification OT",
@@ -1333,6 +1345,7 @@ def exporter_demandes(
             "heures_normales_par_jour": demande.heures_normales_par_jour,
             "heures_supplementaires_par_jour": demande.heures_supplementaires_par_jour,
             "conges_par_jour": demande.conges_par_jour,
+            "recuperation_par_jour": demande.recuperation_par_jour,
             "regle_ot_appliquee_id": demande.regle_ot_appliquee_id,
             "equipement": demande.equipement or "",
             "ordre_travail_sap": demande.ordre_travail_sap or "",
@@ -1376,6 +1389,7 @@ def exporter_demandes(
             serialiser_export_json(demande.heures_normales_par_jour),
             serialiser_export_json(demande.heures_supplementaires_par_jour),
             serialiser_export_json(demande.conges_par_jour),
+            serialiser_export_json(demande.recuperation_par_jour),
             str(demande.regle_ot_appliquee_id or ""),
             demande.description_travaux or "",
             demande.justification_ot or "",
@@ -1494,6 +1508,7 @@ def modifier_demande(
     date_demande = donnees.date_demande or demande.date_demande
 
     conges_candidate = normaliser_conges_par_jour(donnees.conges_par_jour)
+    recuperation_candidate = normaliser_conges_par_jour(donnees.recuperation_par_jour)
     normales_candidate = normaliser_heures_par_jour(donnees.heures_normales_par_jour)
     supps_candidate = normaliser_heures_par_jour(donnees.heures_supplementaires_par_jour)
     jours_nommes = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -1501,15 +1516,15 @@ def modifier_demande(
 
     if utilisateur.role in {models.RoleUtilisateur.TECHNICIEN, models.RoleUtilisateur.SUPERVISEUR}:
         if not utilisateur.autorise_weekend:
-            for cle in set((normales_candidate or {}).keys()) | set((supps_candidate or {}).keys()) | set((conges_candidate or {}).keys()):
-                if not jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, cle):
+            for cle in set((normales_candidate or {}).keys()) | set((supps_candidate or {}).keys()) | set((conges_candidate or {}).keys()) | set((recuperation_candidate or {}).keys()):
+                if not jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, cle, recuperation_candidate):
                     continue
                 date_jour = date_depuis_cle(cle, date_demande)
                 if date_jour and est_weekend(date_jour):
                     raise HTTPException(status_code=403, detail="Saisie le week-end non autorisÃ©e pour votre rÃ´le")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
-        if payload_contient_jours_passes(normales_candidate, supps_candidate, conges_candidate, date_demande) and not peut_saisir_jours_passes(utilisateur):
+        if payload_contient_jours_passes(normales_candidate, supps_candidate, conges_candidate, date_demande, recuperation_candidate) and not peut_saisir_jours_passes(utilisateur):
             raise HTTPException(status_code=403, detail="La modification des jours passÃ©s nÃ©cessite l'autorisation d'un administrateur")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN_SHIFT:
@@ -1517,7 +1532,7 @@ def modifier_demande(
             raise HTTPException(status_code=403, detail="Modification d'une journÃ©e passÃ©e non autorisÃ©e. Contactez un administrateur.")
 
     if utilisateur.role == models.RoleUtilisateur.TECHNICIEN:
-        if jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, jour_courant):
+        if jour_a_du_contenu(normales_candidate, supps_candidate, conges_candidate, jour_courant, recuperation_candidate):
             if demande.date_demande != aujourdhui_maroc():
                 raise HTTPException(status_code=403, detail="Les techniciens ne peuvent saisir que la date du jour")
             if est_weekend(demande.date_demande) and not utilisateur.autorise_weekend:
@@ -1533,6 +1548,7 @@ def modifier_demande(
         db,
         utilisateur,
         date_demande,
+        recuperation_candidate,
     )
     if breakdown is None:
         if donnees.heure_debut is not None and donnees.heure_fin is not None:
@@ -1551,7 +1567,8 @@ def modifier_demande(
     demande.heures_supplementaires = supp
     demande.heures_normales_par_jour = heures_normales_dict
     demande.heures_supplementaires_par_jour = heures_supplementaires_dict
-    demande.conges_par_jour = normaliser_conges_par_jour(donnees.conges_par_jour)
+    demande.conges_par_jour = conges_candidate
+    demande.recuperation_par_jour = recuperation_candidate
     if donnees.localisation is not None:
         demande.localisation = donnees.localisation
     demande.equipement = donnees.equipement
@@ -1609,10 +1626,14 @@ def valider_demande(
         raise HTTPException(status_code=404, detail="Demande introuvable")
     if demande.statut != models.StatutDemande.EN_ATTENTE:
         raise HTTPException(status_code=400, detail="Cette demande n'est plus en attente")
-    if not requete.commentaire or not requete.commentaire.strip():
-        raise HTTPException(status_code=400, detail="Un commentaire est requis pour confirmer une demande")
-    if requete.action == "approuver" and not requete.motif_validation:
-        raise HTTPException(status_code=400, detail="Un motif est requis pour approuver une demande")
+
+    # Les demandes de congé / récupération (aucune heure, juste un jour d'absence)
+    # sont validées d'un simple clic, sans motif ni commentaire obligatoires.
+    if not demande.est_conge_recuperation:
+        if not requete.commentaire or not requete.commentaire.strip():
+            raise HTTPException(status_code=400, detail="Un commentaire est requis pour confirmer une demande")
+        if requete.action == "approuver" and not requete.motif_validation:
+            raise HTTPException(status_code=400, detail="Un motif est requis pour approuver une demande")
 
     action_map = {
         "approuver": (models.StatutDemande.APPROUVEE, models.ActionValidation.APPROUVER, models.TypeNotification.DEMANDE_APPROUVEE),
