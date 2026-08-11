@@ -2,8 +2,8 @@
 Connexion à la base de données.
 
 En développement : SQLite (fichier local suivi_heures.db).
-En production : il suffit de changer DATABASE_URL pour une URL PostgreSQL,
-par exemple : postgresql+psycopg2://utilisateur:motdepasse@localhost:5432/suivi_heures
+En production (Render) : PostgreSQL via la variable d'environnement DATABASE_URL
+(base de données gérée par Render, fournie automatiquement par render.yaml).
 
 C'est le seul fichier à modifier pour changer de base de données.
 """
@@ -20,7 +20,11 @@ import models
 logger = logging.getLogger(__name__)
 
 def _get_app_data_dir() -> Path:
-    """Détermine le répertoire de stockage des données en fonction de l'environnement."""
+    """Détermine le répertoire de stockage des fichiers (uploads, SQLite local).
+
+    Note : quand DATABASE_URL est défini (PostgreSQL), ce répertoire ne sert
+    plus qu'aux pièces jointes téléversées, pas aux données métier.
+    """
     candidates: list[Path] = []
 
     app_data_dir = os.environ.get("APP_DATA_DIR")
@@ -30,15 +34,9 @@ def _get_app_data_dir() -> Path:
     if os.environ.get("WEBSITE_SITE_NAME"):
         candidates.append(Path("/home/site/data"))
 
-    # Si DATABASE_URL est défini (PostgreSQL externe), utiliser répertoires temporaires
     if os.environ.get("DATABASE_URL"):
         candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
-        candidates.append(Path(".").resolve())
     else:
-        # Sinon sur Render avec disque local
-        if os.environ.get("RENDER"):
-            candidates.append(Path("/var/data"))
-        candidates.append(Path(tempfile.gettempdir()) / "suivi-heures-ot")
         candidates.append(Path(".").resolve())
 
     for candidate in candidates:
@@ -55,9 +53,6 @@ def _get_app_data_dir() -> Path:
         logger.warning("Repertoire de donnees non inscriptible: %s", candidate)
 
     raise RuntimeError("Aucun repertoire de stockage accessible n'a pu etre prepare")
-
-
-APP_DATA_DIR = _get_app_data_dir()
 
 
 APP_DATA_DIR = _get_app_data_dir()

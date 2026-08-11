@@ -80,6 +80,10 @@ uvicorn main:app --reload
 Il faudra aussi installer le pilote PostgreSQL : `pip install psycopg2-binary`.
 Aucun autre fichier n'a besoin d'être modifié.
 
+Sur Render, cette variable est déjà configurée automatiquement dans
+`render.yaml` (base PostgreSQL gratuite gérée par Render) — voir
+`STOCKAGE_DONNEES.md` à la racine du dépôt pour le détail.
+
 ## Export des heures approuvées / rejetées
 
 Un script d'export est disponible dans `export_heures.py`.

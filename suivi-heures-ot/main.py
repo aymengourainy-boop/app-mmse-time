@@ -35,65 +35,13 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from auth import creer_token, decoder_token, verifier_mot_de_passe, hasher_mot_de_passe
-from database import SessionLocal, engine, ensure_schema, get_db, APP_DATA_DIR
+from database import SessionLocal, ensure_schema, get_db, APP_DATA_DIR
 from pathlib import Path
 
-# CrÃ©e les tables si elles n'existent pas encore (ne touche jamais aux donnÃ©es existantes)
+# CrÃ©e les tables si elles n'existent pas encore, ajoute les colonnes manquantes.
+# Ne touche JAMAIS aux donnÃ©es existantes (pas de DROP).
 ensure_schema()
 
-# INITIALISATION DE LA BASE DE DONNEES
-db = SessionLocal()
-try:
-    user_count = db.query(models.Utilisateur).count()
-    force_reset = os.getenv("FORCE_RESET_DB", "false").lower() == "true"
-    if user_count == 0 or user_count < 5 or force_reset:
-        print("[INIT] Reinitialisation de la base...")
-        models.Base.metadata.drop_all(bind=engine)
-        models.Base.metadata.create_all(bind=engine)
-        
-        dept = models.Departement(code="MAINT", nom="Maintenance")
-        db.add(dept)
-        db.flush()
-        
-        equipe = models.Equipe(nom="Equipe A", shift="Jour", departement_id=dept.id)
-        db.add(equipe)
-        db.flush()
-        
-        admin = models.Utilisateur(matricule="ADMIN001", nom="Admin", prenom="Systeme",
-            email="admin@exemple.com", numero_telephone="0600000001",
-            mot_de_passe_hash=hasher_mot_de_passe("admin123"),
-            role=models.RoleUtilisateur.ADMINISTRATEUR, departement_id=dept.id, actif=True)
-        sup = models.Utilisateur(matricule="SUP001", nom="Bernard", prenom="Marie",
-            email="marie.bernard@exemple.com", numero_telephone="0600000002",
-            mot_de_passe_hash=hasher_mot_de_passe("sup123"),
-            role=models.RoleUtilisateur.SUPERVISEUR, departement_id=dept.id, equipe_id=equipe.id, actif=True)
-        sup_shift = models.Utilisateur(matricule="SUPS001", nom="Shift", prenom="Sarah",
-            email="sarah.shift@exemple.com", numero_telephone="0600000005",
-            mot_de_passe_hash=hasher_mot_de_passe("sups123"),
-            role=models.RoleUtilisateur.SUPERVISEUR_SHIFT, departement_id=dept.id, equipe_id=equipe.id, actif=True)
-        db.add_all([admin, sup, sup_shift])
-        db.flush()
-        
-        tech = models.Utilisateur(matricule="TECH001", nom="Dupont", prenom="Jean",
-            email="jean.dupont@exemple.com", numero_telephone="0600000003",
-            mot_de_passe_hash=hasher_mot_de_passe("tech123"),
-            role=models.RoleUtilisateur.TECHNICIEN, departement_id=dept.id, equipe_id=equipe.id, superviseur_id=sup.id, actif=True)
-        tech_shift = models.Utilisateur(matricule="TECHS001", nom="Shift", prenom="Hamid",
-            email="hamid.shift@exemple.com", numero_telephone="0600000004",
-            mot_de_passe_hash=hasher_mot_de_passe("shift123"),
-            role=models.RoleUtilisateur.TECHNICIEN_SHIFT, departement_id=dept.id, equipe_id=equipe.id, superviseur_id=sup.id, actif=True)
-        db.add_all([tech, tech_shift])
-        
-        reg = models.RegleHeuresSupplementaires(departement_id=dept.id, nom="Regle par defaut",
-            seuil_heures_normales_jour=8, seuil_heures_normales_semaine=40, taux_majoration_ot=1.5)
-        db.add(reg)
-        db.commit()
-        print("[INIT] OK - Comptes: ADMIN001, SUP001, SUPS001, TECH001, TECHS001")
-except Exception as e:
-    db.rollback()
-    print(f"[INIT ERREUR] {e}")
-finally:
-    db.close()
 UPLOADS_DIR = APP_DATA_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAROC_TZ = ZoneInfo("Africa/Casablanca")
@@ -112,23 +60,24 @@ app.add_middleware(
 )
 
 
-# Initialiser la base de donnees au demarrage
+# Initialiser la base de donnees au demarrage (une seule fois, jamais destructif)
 @app.on_event("startup")
 async def startup_event():
-    """Initialise la base de donnees si necessaire au demarrage de l'application."""
+    """CrÃ©e les 5 comptes de dÃ©monstration UNIQUEMENT si la base est totalement vide.
+
+    N'efface et ne rÃ©initialise JAMAIS de donnÃ©es existantes : si un seul
+    utilisateur existe dÃ©jÃ  (mÃªme aprÃ¨s suppression des comptes de dÃ©mo),
+    cette fonction ne fait rien.
+    """
     db = SessionLocal()
     try:
         user_count = db.query(models.Utilisateur).count()
-        if user_count >= 5:
-            logger.info(f"[DB] Base de donnees valide: {user_count} utilisateurs trouves")
+        if user_count > 0:
+            logger.info(f"[DB] Base de donnees existante: {user_count} utilisateurs trouves")
             return
-        
-        logger.warning(f"[DB] Base de donnees incomplete ({user_count} utilisateurs), reinitialisation...")
-        
-        # Supprimer et recreer les tables
-        models.Base.metadata.drop_all(bind=engine)
-        models.Base.metadata.create_all(bind=engine)
-        
+
+        logger.info("[DB] Base de donnees vide, creation des comptes de demonstration...")
+
         # Donnees de base
         dept = models.Departement(code="MAINT", nom="Maintenance")
         db.add(dept)
@@ -215,7 +164,7 @@ async def startup_event():
         db.add(reg)
         
         db.commit()
-        logger.info("[DB] Base de donnees reinitialisee avec succes!")
+        logger.info("[DB] Comptes de demonstration crees avec succes!")
         logger.info("Comptes crees: ADMIN001, SUP001, SUPS001, TECH001, TECHS001")
         
     except Exception as e:
