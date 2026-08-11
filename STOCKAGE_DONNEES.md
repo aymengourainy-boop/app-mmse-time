@@ -19,24 +19,19 @@ chaque redémarrage / redéploiement du service. Deux causes cumulées :
 
 ### 1. Base de données PostgreSQL gérée par Render
 
-`render.yaml` déclare maintenant une base PostgreSQL gratuite Render
-(`app-mmse-db`) et transmet automatiquement son URL de connexion à
-l'application via la variable d'environnement `DATABASE_URL` :
+Le service web `app-mmse-time` est connecté à la base PostgreSQL gratuite
+Render **`suivi-heures-db`** via la variable d'environnement `DATABASE_URL`,
+configurée manuellement dans le dashboard Render (onglet **Environment** du
+service web, valeur copiée depuis l'**Internal Database URL** de la base).
+
+`render.yaml` déclare cette variable avec `sync: false` : ça indique à Render
+que la valeur est gérée manuellement dans le dashboard et ne doit pas être
+écrasée automatiquement lors d'un sync de Blueprint :
 
 ```yaml
-databases:
-  - name: app-mmse-db
-    plan: free
-    databaseName: suivi_heures
-    user: suivi_heures_user
-
-services:
-  - type: web
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: app-mmse-db
-          property: connectionString
+envVars:
+  - key: DATABASE_URL
+    sync: false
 ```
 
 PostgreSQL est un service géré indépendant du conteneur web : les données
@@ -46,6 +41,10 @@ service gratuit.
 `suivi-heures-ot/database.py` utilise `DATABASE_URL` dès qu'elle est définie
 (sinon il utilise SQLite localement pour le développement) — aucun autre
 fichier n'a besoin d'être modifié.
+
+**Si le service web ou la base sont un jour recréés**, il faudra reconfigurer
+manuellement `DATABASE_URL` de la même façon (voir « Vérification » ci-dessous
+pour le test qui confirme que c'est bien branché).
 
 ### 2. Suppression de la logique de réinitialisation destructive
 

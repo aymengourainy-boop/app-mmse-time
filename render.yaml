@@ -1,9 +1,3 @@
-databases:
-  - name: app-mmse-db
-    plan: free
-    databaseName: suivi_heures
-    user: suivi_heures_user
-
 services:
   - type: web
     name: app-mmse-time
@@ -13,7 +7,8 @@ services:
     startCommand: cd suivi-heures-ot && python main.py
     autoDeploy: true
     envVars:
+      # Base PostgreSQL "suivi-heures-db", connectee manuellement dans le
+      # dashboard Render (Environment). sync: false = Render ne touche pas
+      # a cette valeur lors d'un sync de Blueprint.
       - key: DATABASE_URL
-        fromDatabase:
-          name: app-mmse-db
-          property: connectionString
+        sync: false
